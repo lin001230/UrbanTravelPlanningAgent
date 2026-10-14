@@ -14,8 +14,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
@@ -115,40 +113,13 @@ public abstract class BaseAgent {
         this.currentStep = 1;
 
         AtomicBoolean closed = new AtomicBoolean();
-        var heartbeat = Executors.newSingleThreadScheduledExecutor(
-                Thread.ofPlatform().daemon().name("agent-sse-heartbeat").factory());
-        Runnable closeConnection = () -> {
-            closed.set(true);
-            heartbeat.shutdownNow();
-        };
         emitter.onTimeout(() -> {
             log.warn("SSE连接超时，关闭连接。");
-            closeConnection.run();
+            closed.set(true);
             emitter.complete();
         });
-        emitter.onError(error -> closeConnection.run());
-        emitter.onCompletion(closeConnection);
-
-        try {
-            // 注释帧会立即刷新响应，但不会作为聊天内容显示在前端。
-            emitter.send(SseEmitter.event().comment("connected"));
-        } catch (IOException | IllegalStateException e) {
-            closeConnection.run();
-            this.status = ModelStatus.IDLE;
-            emitter.completeWithError(e);
-            return emitter;
-        }
-        heartbeat.scheduleAtFixedRate(() -> {
-            if (closed.get()) {
-                return;
-            }
-            try {
-                emitter.send(SseEmitter.event().comment("heartbeat"));
-            } catch (IOException | IllegalStateException e) {
-                closeConnection.run();
-                emitter.completeWithError(e);
-            }
-        }, 10, 10, TimeUnit.SECONDS);
+        emitter.onError(error -> closed.set(true));
+        emitter.onCompletion(() -> closed.set(true));
 
         // 异步执行，模型每得到一步结果，都返回给客户端
         Thread.startVirtualThread(() -> {
@@ -192,8 +163,7 @@ public abstract class BaseAgent {
                     log.warn("向客户端发送响应时发生错误: {}", ex.getMessage());
                 }
             } finally {
-                // 关闭心跳线程池
-                closeConnection.run();
+                closed.set(true);
                 try {
                     // 等后台调用退出后再释放资源，避免断连回调与模型执行冲突。
                     this.release();

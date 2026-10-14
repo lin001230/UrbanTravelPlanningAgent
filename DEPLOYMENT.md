@@ -46,9 +46,8 @@ Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `no
 curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深圳湾口岸" "https://你的服务域名/api/agent/chat/stream"
 ```
 
-流式接口会立即发送 `:connected` 注释帧，并每 10 秒发送 `:heartbeat`；查询重写和路线规划在后台执行。
-注释帧不会显示为聊天消息。心跳用于减少空闲断连，不能延长调试工具或网关的总请求时限；应用 SSE 总超时仍为 300 秒。
-该心跳方式参见 [Spring MVC 的断连处理说明](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-disconnects)。
+流式接口不发送连接注释帧或定时心跳；查询重写和路线规划在后台执行，每完成一步才发送业务结果，异常时发送错误事件。
+等待第一步结果期间可能没有响应数据；应用 SSE 总超时为 300 秒，调试工具或网关也可能有独立的超时限制。
 
 如果工具返回 `CUQPS_HAS_EXCEEDED_THE_LIMIT`，检查高德控制台对应接口的调用频率限制，并减少重复调试和密集工具调用；增大 SSE 超时时间无法解决接口限流。
 

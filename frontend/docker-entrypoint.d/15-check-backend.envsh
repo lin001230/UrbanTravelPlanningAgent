@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# Run before the official 20-envsubst-on-templates.sh hook.
+if [ -z "${BACKEND_ORIGIN:-}" ]; then
+    echo >&2 'BACKEND_ORIGIN is required, e.g. https://your-backend-domain (without /api or a trailing slash).'
+    exit 1
+fi
+
+case "$BACKEND_ORIGIN" in
+    *[!a-zA-Z0-9.:/-]*)
+        echo >&2 'BACKEND_ORIGIN contains invalid characters; use an HTTP(S) origin only.'
+        exit 1
+        ;;
+esac
+
+if ! printf '%s\n' "$BACKEND_ORIGIN" | grep -Eq '^https?://[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?$'; then
+    echo >&2 'BACKEND_ORIGIN must be http(s)://hostname[:port], without /api, a path, or a trailing slash.'
+    exit 1
+fi

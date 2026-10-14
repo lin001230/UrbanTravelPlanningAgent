@@ -53,6 +53,8 @@ data:模型最终的输出为：...
 
 ## 构建与部署
 
+部署到微信云托管请参阅 [前端部署说明](./DEPLOYMENT.md)：已提供多阶段 `Dockerfile`、Nginx SSE 代理配置和运行时后端地址校验。构建目录选择 `frontend`，服务端口为 `80`，通过 `BACKEND_ORIGIN` 指向已部署的后端。
+
 ```powershell
 npm run build
 npm run preview

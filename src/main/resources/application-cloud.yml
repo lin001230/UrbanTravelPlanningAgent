@@ -7,6 +7,7 @@ spring:
       chat:
         options:
           model: qwen3.8-flash
+          multi-model: true
     mcp:
       client:
         stdio:

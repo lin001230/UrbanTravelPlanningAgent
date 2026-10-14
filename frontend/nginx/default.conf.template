@@ -1,0 +1,56 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    server_tokens off;
+
+    # Frontend liveness only; this does not invoke the agent or depend on its health.
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location ^~ /api/ {
+        # No URI suffix: preserve /api/... and the original query string.
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_http_version 1.1;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header Connection "";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # HTTPS backend domains require their own Host header and TLS SNI.
+        proxy_ssl_server_name on;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_ssl_verify_depth 3;
+
+        # Forward SSE frames immediately; do not retry agent invocations.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_next_upstream off;
+        proxy_set_header Accept-Encoding "";
+        gzip off;
+        add_header X-Accel-Buffering no always;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 330s;
+        proxy_send_timeout 330s;
+        send_timeout 330s;
+    }
+
+    # Vite filenames contain content hashes. Missing assets must return 404.
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

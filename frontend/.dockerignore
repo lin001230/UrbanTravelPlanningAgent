@@ -1,0 +1,13 @@
+.git
+.idea
+.vscode
+node_modules
+dist
+test-results
+playwright-report
+tests
+*.log
+.env
+.env.*
+README.md
+DEPLOYMENT.md

@@ -36,3 +36,27 @@ docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 
 构建时跳过依赖外部服务的 Spring 上下文测试，但仍编译测试代码。
 Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `node` 运行，无需临时下载 npm 包。
+
+## Maven 下载阶段 TLS 握手失败
+
+当 `dependency:go-offline` 报 `Remote host terminated the handshake` 或 `SSL peer shut down incorrectly` 时，表示构建容器访问仓库时 HTTPS 连接失败。这发生在代码编译之前；仅凭该日志不能归因于 Java 业务代码，也不能把 `absent` 当作依赖版本不存在。
+
+Dockerfile 在解析 `pom.xml` 前复制 `.mvn/cloud-settings.xml`，两个 Maven 步骤都通过 `-s` 显式加载它，将 Maven Central 的依赖和插件请求转到阿里云 HTTPS 公共仓库。`-U` 使 Maven 重新检查先前缓存的下载失败。此设置仅用于显式指定它的构建，不会修改本机 Maven 全局配置。
+
+将以下文件一起提交、推送到云托管关联的分支后，触发重新构建：
+
+- `Dockerfile`
+- `.mvn/cloud-settings.xml`
+
+`.dockerignore` 必须允许 `.mvn/cloud-settings.xml` 进入构建上下文。当前配置已允许。Maven 日志中父 POM 下载仓库应显示为 `cloud-central (https://maven.aliyun.com/repository/public)`。
+
+本地验证命令（需要 Java 21 和 Maven）：
+
+```powershell
+mvn -B -ntp -U -s .mvn/cloud-settings.xml dependency:go-offline
+mvn -B -ntp -U -s .mvn/cloud-settings.xml -DskipTests package
+```
+
+`-DskipTests` 与 Dockerfile 一致：仍编译测试代码，跳过需要外部 API 凭据及 MCP 服务的上下文测试。
+
+如果更换镜像后云端仍出现 TLS 错误，需要检查云构建环境到该仓库的出口网络、代理或 CA 信任链。公司代理替换 TLS 证书时应按平台要求安装可信 CA；不要关闭证书校验或改用明文 HTTP。更换镜像是针对仓库访问路径的修复，最终结果仍需由云端重新构建确认。

@@ -1,11 +1,12 @@
 # Build the Spring Boot executable jar with Java 21.
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
+COPY .mvn/cloud-settings.xml ./.mvn/cloud-settings.xml
 COPY pom.xml ./
-RUN mvn -B -ntp dependency:go-offline
+RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml dependency:go-offline
 COPY src ./src
 # Context tests require external API credentials and a running MCP server.
-RUN mvn -B -ntp -DskipTests package
+RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml -DskipTests package
 
 # Install the MCP server at build time to avoid downloads during startup.
 FROM node:22-bookworm-slim AS mcp

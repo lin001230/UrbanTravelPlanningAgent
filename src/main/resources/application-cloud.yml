@@ -1,0 +1,22 @@
+spring:
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+      agent:
+        base-url: ${DASHSCOPE_BASE_URL}
+      chat:
+        options:
+          model: qwen3.8-flash
+    mcp:
+      client:
+        stdio:
+          connections:
+            amap-mcp-server:
+              command: node
+              args:
+                - /opt/amap/node_modules/@amap/amap-maps-mcp-server/build/index.js
+              env:
+                AMAP_MAPS_API_KEY: ${AMAP_MAPS_API_KEY}
+
+search-api:
+  api-key: ${SEARCH_API_KEY}

@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+target
+frontend
+**/node_modules
+*.log
+logs
+.env
+.env.*
+src/main/resources/application-local.yml

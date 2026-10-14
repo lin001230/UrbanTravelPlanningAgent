@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: urban-travel-planning-agent
+  profiles:
+    active: local
+
+server:
+  port: 8888
+  servlet:
+    context-path: /api
+
+#logging:
+#  level:
+#    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: debug
+
+# springdoc-openapi
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: cn.szu.urbantravelplanningagent.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn

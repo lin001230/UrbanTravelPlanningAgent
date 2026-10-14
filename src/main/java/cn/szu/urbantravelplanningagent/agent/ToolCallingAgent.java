@@ -64,6 +64,10 @@ public class ToolCallingAgent extends ReActAgent {
                     .call()
                     .chatResponse();
             this.toolCallChatResponse = chatResponse;
+            if (chatResponse == null) { // 如果 chatResponse 为null，抛出异常
+                log.warn("ChatResponse is null");
+                throw new RuntimeException("ChatResponse is null");
+            }
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
             log.info("Assistant: {}", assistantMessage.getText());
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
@@ -72,7 +76,10 @@ public class ToolCallingAgent extends ReActAgent {
                     collect(Collectors.joining("\n"));
             log.info("工具调用列表: {}", toolListStr);
             // 将推理结果加入消息列表
-            getMessageList().add(new AssistantMessage(assistantMessage.getText()));
+            String assistantText = assistantMessage.getText();
+            // null/空值 处理
+            assistantText = assistantText == null ? "" : assistantText;
+            getMessageList().add(new AssistantMessage(assistantText));
             this.setThinkResult(assistantMessage.getText());
             return assistantMessage.hasToolCalls();
         } catch (Exception e) {

@@ -93,12 +93,12 @@ public abstract class BaseAgent {
         try {
             // 判断模型状态
             if (this.status != ModelStatus.IDLE) {
-                emitter.completeWithError(new RuntimeException("模型当前正在处理其他请求，请稍等..."));
+                sendMessageAndComplete(emitter, "模型当前正在处理其他请求，请稍等...");
                 return emitter;
             }
             // 判断用户消息是否为空
             if (userMessage == null || userMessage.isEmpty()) {
-                emitter.completeWithError(new RuntimeException("用户消息为空，请输入有效消息..."));
+                sendMessageAndComplete(emitter, "用户消息为空，请输入有效消息...");
                 return emitter;
             }
         } catch (Exception e) {
@@ -159,6 +159,20 @@ public abstract class BaseAgent {
         });
 
         return emitter;
+    }
+
+    /**
+     * 以 SSE 消息形式返回提示信息并正常结束
+     * @param emitter
+     * @param message
+     */
+    public void sendMessageAndComplete(SseEmitter emitter, String message) {
+        try {
+            emitter.send(message);
+            emitter.complete();
+        } catch (IOException e) {
+            emitter.completeWithError(e);
+        }
     }
 
 

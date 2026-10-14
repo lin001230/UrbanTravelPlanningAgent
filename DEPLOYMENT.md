@@ -37,6 +37,21 @@ docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 构建时跳过依赖外部服务的 Spring 上下文测试，但仍编译测试代码。
 Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `node` 运行，无需临时下载 npm 包。
 
+## 流式接口超时排查
+
+先请求 `/api/v3/api-docs` 确认服务可达，再使用支持 SSE 的前端或 `curl.exe -N` 检查逐步返回的数据。
+控制台调试页面显示超时不一定代表后台没有执行：模型推理和工具调用可能需要几十秒才完成一步。
+
+```powershell
+curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深圳湾口岸" "https://你的服务域名/api/agent/chat/stream"
+```
+
+流式接口会立即发送 `:connected` 注释帧，并每 10 秒发送 `:heartbeat`；查询重写和路线规划在后台执行。
+注释帧不会显示为聊天消息。心跳用于减少空闲断连，不能延长调试工具或网关的总请求时限；应用 SSE 总超时仍为 300 秒。
+该心跳方式参见 [Spring MVC 的断连处理说明](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-disconnects)。
+
+如果工具返回 `CUQPS_HAS_EXCEEDED_THE_LIMIT`，检查高德控制台对应接口的调用频率限制，并减少重复调试和密集工具调用；增大 SSE 超时时间无法解决接口限流。
+
 ## Maven 下载阶段 TLS 握手失败
 
 当 `dependency:go-offline` 报 `Remote host terminated the handshake` 或 `SSL peer shut down incorrectly` 时，表示构建容器访问仓库时 HTTPS 连接失败。这发生在代码编译之前；仅凭该日志不能归因于 Java 业务代码，也不能把 `absent` 当作依赖版本不存在。

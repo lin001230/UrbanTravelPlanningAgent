@@ -2,7 +2,9 @@ package cn.szu.urbantravelplanningagent.controller;
 
 import cn.szu.urbantravelplanningagent.agent.MyAgent;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,8 +33,10 @@ public class AgentController {
      * @param message
      * @return
      */
-    @GetMapping("/chat/stream")
-    public SseEmitter doChatStream(String message) {
+    @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter doChatStream(String message, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("X-Accel-Buffering", "no");
         return myAgent.runStream(message);
     }
 

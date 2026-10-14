@@ -6,13 +6,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.rag.Query;
+import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 @Slf4j
@@ -22,7 +26,7 @@ public abstract class BaseAgent {
     // 模型名称
     public String name;
     // 模型状态，默认为空闲
-    public ModelStatus status = ModelStatus.IDLE;
+    public volatile ModelStatus status = ModelStatus.IDLE;
     // 系统提示词
     public String systemPrompt;
     // 下一步提示词
@@ -86,7 +90,7 @@ public abstract class BaseAgent {
      * @param userMessage
      * @return
      */
-    public SseEmitter runStream(String userMessage) {
+    public synchronized SseEmitter runStream(String userMessage) {
         // 创建 SseEmitter对象
         SseEmitter emitter = new SseEmitter(300000L);
 
@@ -110,15 +114,57 @@ public abstract class BaseAgent {
         this.status = ModelStatus.RUNNING;
         this.currentStep = 1;
 
-        // 异步执行，模型每得到一步结果，都返回给客户端
-        CompletableFuture.runAsync(() -> {
-            // 将用户输入的问题添加到消息列表中
-            messageList.add(new UserMessage(userMessage));
+        AtomicBoolean closed = new AtomicBoolean();
+        var heartbeat = Executors.newSingleThreadScheduledExecutor(
+                Thread.ofPlatform().daemon().name("agent-sse-heartbeat").factory());
+        Runnable closeConnection = () -> {
+            closed.set(true);
+            heartbeat.shutdownNow();
+        };
+        emitter.onTimeout(() -> {
+            log.warn("SSE连接超时，关闭连接。");
+            closeConnection.run();
+            emitter.complete();
+        });
+        emitter.onError(error -> closeConnection.run());
+        emitter.onCompletion(closeConnection);
 
+        try {
+            // 注释帧会立即刷新响应，但不会作为聊天内容显示在前端。
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException | IllegalStateException e) {
+            closeConnection.run();
+            this.status = ModelStatus.IDLE;
+            emitter.completeWithError(e);
+            return emitter;
+        }
+        heartbeat.scheduleAtFixedRate(() -> {
+            if (closed.get()) {
+                return;
+            }
             try {
-                for (int i = 0; i < MAX_STEPS && this.status != ModelStatus.FINISHED; i++) {
+                emitter.send(SseEmitter.event().comment("heartbeat"));
+            } catch (IOException | IllegalStateException e) {
+                closeConnection.run();
+                emitter.completeWithError(e);
+            }
+        }, 10, 10, TimeUnit.SECONDS);
+
+        // 异步执行，模型每得到一步结果，都返回给客户端
+        Thread.startVirtualThread(() -> {
+            try {
+                // 查询重写也会调用模型，必须放到后台，避免阻塞 SSE 建连。
+                String rewrittenMessage = rewriteUserMessage(userMessage);
+                if (closed.get()) {
+                    return;
+                }
+                messageList.add(new UserMessage(rewrittenMessage));
+                for (int i = 0; i < MAX_STEPS && this.status != ModelStatus.FINISHED && !closed.get(); i++) {
                     // 执行推理
                     responseContent = step();
+                    if (closed.get()) {
+                        return;
+                    }
                     responseContent = responseContent == null ? "" : responseContent;
                     // 将本轮推理结果发送给客户端
                     emitter.send("第" + this.currentStep + "步的结果为: " + responseContent);
@@ -131,31 +177,31 @@ public abstract class BaseAgent {
                 if (this.status == ModelStatus.FINISHED) {
                     log.info("Model finished. Please check the model logic.");
                 }
-                emitter.send("模型最终的输出为：" + this.responseContent);
+                if (!closed.get()) {
+                    emitter.send("模型最终的输出为：" + this.responseContent);
+                }
             } catch (Exception e) {
-                log.error("Error occurred: {}", e.getMessage());
+                log.error("流式请求处理失败", e);
                 this.responseContent = "模型在处理请求时发生错误，请稍后重试...";
                 try {
                     // 将错误信息反馈给客户端
-                    emitter.send(this.responseContent);
-                } catch (IOException ex) {
+                    if (!closed.get()) {
+                        emitter.send(SseEmitter.event().name("error").data(this.responseContent));
+                    }
+                } catch (IOException | IllegalStateException ex) {
                     log.warn("向客户端发送响应时发生错误: {}", ex.getMessage());
                 }
             } finally {
-                this.status = ModelStatus.IDLE;
-                emitter.complete();
+                // 关闭心跳线程池
+                closeConnection.run();
+                try {
+                    // 等后台调用退出后再释放资源，避免断连回调与模型执行冲突。
+                    this.release();
+                } finally {
+                    this.status = ModelStatus.IDLE;
+                    emitter.complete();
+                }
             }
-        });
-
-        // 超时处理
-        emitter.onTimeout(() -> {
-            log.warn("SSE连接超时，关闭连接。用户消息：{}", userMessage);
-            emitter.complete();
-        });
-        // 完成处理
-        emitter.onCompletion(() -> {
-            // 释放资源
-            this.release();
         });
 
         return emitter;
@@ -173,6 +219,25 @@ public abstract class BaseAgent {
         } catch (IOException e) {
             emitter.completeWithError(e);
         }
+    }
+
+    /**
+     * 对用户输入的消息进行重写
+     * @param userMessage 用户输入的消息
+     * @return 重写后的用户消息
+     */
+    public String rewriteUserMessage(String userMessage) {
+        log.info("Rewriting before user input: {}", userMessage);
+        // 创建重写查询对象
+        RewriteQueryTransformer rewriteQueryTransformer = RewriteQueryTransformer.builder().chatClientBuilder(chatClient.mutate()).build();
+        // 创建查询对象
+        Query query = new Query(userMessage);
+        // 执行查询重写
+        Query transformedQuery = rewriteQueryTransformer.transform(query);
+        String rewrittenMessage = transformedQuery.text();
+        log.info("Rewriting after user input: {}", rewrittenMessage);
+        // 返回重写后的消息
+        return rewrittenMessage;
     }
 
 

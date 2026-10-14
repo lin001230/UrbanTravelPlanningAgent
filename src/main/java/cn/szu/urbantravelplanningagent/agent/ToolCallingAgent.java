@@ -14,7 +14,6 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
-import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,7 +40,7 @@ public class ToolCallingAgent extends ReActAgent {
         toolCallingManager = ToolCallingManager.builder().build();
         this.chatOptions = DashScopeChatOptions.builder()
                 .internalToolExecutionEnabled(false)
-                .withMultiModel(true)
+                .multiModel(true)
                 .enableThinking(true)
                 .build();
     }

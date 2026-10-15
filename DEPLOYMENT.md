@@ -4,7 +4,8 @@
 端口必须与容器内 Spring Boot 的监听端口一致，参见[官方 Java 部署说明](https://cloud.tencent.com/document/product/1243/49239)。
 
 镜像分阶段构建 Maven 项目，运行环境包含 Java 21、Node.js 22 和高德 MCP 服务。
-云端自动启用 `cloud` 配置，接口前缀仍为 `/api`，例如 `/api/agent/chat/stream`。
+云端自动启用 `cloud` 配置，接口前缀仍为 `/api`，聊天接口为 `/api/chat/stream`。
+会话和消息保存在外部 MySQL 中，容器重启或重新部署后仍可读取，无需给后端容器挂载聊天数据目录。
 
 ## 环境变量
 
@@ -16,26 +17,66 @@
 | `DASHSCOPE_BASE_URL` | 与本地运行时相同的 DashScope Agent 服务地址 |
 | `AMAP_MAPS_API_KEY` | 高德地图 API Key |
 | `SEARCH_API_KEY` | SearchApi.io API Key |
+| `MYSQL_HOST` | 后端容器能够访问的 MySQL 主机地址，不包含协议和端口，不能使用 `localhost` |
+| `MYSQL_PORT` | MySQL 端口，默认 `3306` |
+| `MYSQL_DATABASE` | 已创建的数据库名称，默认 `urban_travel_planning_agent` |
+| `MYSQL_USERNAME` | 具有会话、消息表读写权限的数据库用户名 |
+| `MYSQL_PASSWORD` | 数据库密码 |
+
+`application-cloud.yml` 使用这些变量生成 JDBC URL，不再连接容器内的 `localhost:3306`。
+数据库的连接信息只配置到后端服务；前端仍只需要 `BACKEND_ORIGIN`。
 
 `SPRING_PROFILES_ACTIVE=cloud`、`SERVER_ADDRESS=0.0.0.0` 和 `SERVER_PORT=8888` 已在镜像中设置。
 如果覆盖 `SERVER_PORT`，需要同步修改云托管服务端口。
 如需调整 JVM 参数，通过 `JAVA_TOOL_OPTIONS` 设置，例如 `-XX:MaxRAMPercentage=60.0`；为 Node.js 子进程和 JVM 非堆内存保留空间。
+
+## 数据库准备
+
+先创建 MySQL 8.0+ 数据库（字符集 `utf8mb4`），选择该数据库后执行 [`src/main/resources/schema.sql`](src/main/resources/schema.sql)，依次创建 `chat_session`、`chat_message` 两张表。
+如果云端已经建好这两张表，确认字段和脚本一致即可；`CREATE TABLE IF NOT EXISTS` 不会修改已有表结构。
+云端已显式设置 `spring.sql.init.mode=never`，启动应用不会自动建表或修改表结构，镜像构建也不需要连接数据库。
+
+确保云托管后端容器能够连接该 MySQL 地址和端口，并配置好数据库侧允许的访问来源。`localhost` 指向后端容器自身，不能用于连接外部 MySQL。
 
 ## 本地验证
 
 安装并启动 Docker 后，在项目根目录执行：
 
 ```powershell
+Copy-Item .env.example .env
+# 编辑 .env，填写真实的 API 和数据库连接信息，再执行以下命令。
 docker build -t urban-travel-planning-agent .
 docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 ```
 
-本地 `.env` 使用 `变量名=值` 的格式，填写上表中的四项配置；该文件已被 `.dockerignore` 排除，请勿提交密钥到代码仓库。
+本地 `.env` 使用 `变量名=值` 的格式，参考根目录 `.env.example` 填写 API 和数据库连接信息；该文件已被 `.gitignore` 和 `.dockerignore` 排除。
+在 Docker Desktop 中连接电脑上运行的 MySQL 时，可以使用 `MYSQL_HOST=host.docker.internal`；云端应替换为实际可达的数据库地址。
+`.env` 由 `docker run --env-file` 注入；直接使用 Maven 或 IDE 启动时，仍需在进程环境变量中配置相应的值。
 启动后访问 `http://localhost:8888/api/swagger-ui.html` 检查服务。
 应用需能访问百炼、高德和 SearchApi.io；对话请求会调用外部服务。
 
-构建时跳过依赖外部服务的 Spring 上下文测试，但仍编译测试代码。
+构建时运行 `ChatMessagesServiceImplTests`、`ChatControllerTests`，验证持久化转换逻辑和新的会话接口；跳过依赖真实数据库、API 和 MCP 的 Spring 上下文测试。
 Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `node` 运行，无需临时下载 npm 包。
+
+## 会话接口验证
+
+后端部署后，先验证不调用模型的会话列表接口：
+
+```powershell
+curl.exe -i http://localhost:8888/api/chat
+```
+
+应返回 HTTP 200，JSON 中 `code=200`，`data` 为会话列表，空库时为 `[]`。该请求也会实际访问数据库。
+然后按 [`frontend/DEPLOYMENT.md`](frontend/DEPLOYMENT.md) 部署前端，验证发送消息、刷新恢复历史、继续对话、修改标题和删除会话。
+当前接口包括：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/api/chat` | 查询会话列表 |
+| GET | `/api/chat/messages?chatId=...` | 查询会话历史 |
+| PUT | `/api/chat?chatId=...&title=...` | 修改标题 |
+| DELETE | `/api/chat?chatId=...` | 删除会话及其消息 |
+| GET | `/api/chat/stream?chatId=...&message=...` | 新建或继续对话，返回 SSE |
 
 ## 流式接口超时排查
 
@@ -43,7 +84,7 @@ Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `no
 控制台调试页面显示超时不一定代表后台没有执行：模型推理和工具调用可能需要几十秒才完成一步。
 
 ```powershell
-curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深圳湾口岸" "https://你的服务域名/api/agent/chat/stream"
+curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深圳湾口岸" "https://你的服务域名/api/chat/stream"
 ```
 
 流式接口不发送连接注释帧或定时心跳；查询重写和路线规划在后台执行，每完成一步才发送业务结果，异常时发送错误事件。
@@ -68,9 +109,9 @@ Dockerfile 在解析 `pom.xml` 前复制 `.mvn/cloud-settings.xml`，两个 Mave
 
 ```powershell
 mvn -B -ntp -U -s .mvn/cloud-settings.xml dependency:go-offline
-mvn -B -ntp -U -s .mvn/cloud-settings.xml -DskipTests package
+mvn -B -ntp -U -s .mvn/cloud-settings.xml '-Dtest=ChatMessagesServiceImplTests,ChatControllerTests' package
 ```
 
-`-DskipTests` 与 Dockerfile 一致：仍编译测试代码，跳过需要外部 API 凭据及 MCP 服务的上下文测试。
+测试范围与 Dockerfile 一致：编译全部测试代码，运行无需外部服务的两组回归测试，不执行 Spring 上下文测试。
 
 如果更换镜像后云端仍出现 TLS 错误，需要检查云构建环境到该仓库的出口网络、代理或 CA 信任链。公司代理替换 TLS 证书时应按平台要求安装可信 CA；不要关闭证书校验或改用明文 HTTP。更换镜像是针对仓库访问路径的修复，最终结果仍需由云端重新构建确认。

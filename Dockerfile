@@ -5,8 +5,9 @@ COPY .mvn/cloud-settings.xml ./.mvn/cloud-settings.xml
 COPY pom.xml ./
 RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml dependency:go-offline
 COPY src ./src
-# Context tests require external API credentials and a running MCP server.
-RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml -DskipTests package
+# Run offline service/controller tests; the full context test needs MySQL, API keys and MCP.
+RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml \
+    -Dtest=ChatMessagesServiceImplTests,ChatControllerTests package
 
 # Install the MCP server at build time to avoid downloads during startup.
 FROM node:22-bookworm-slim AS mcp
@@ -16,6 +17,7 @@ RUN npm install --prefix /opt/amap --omit=dev --no-audit --no-fund \
 
 FROM eclipse-temurin:21-jre-noble AS runtime
 WORKDIR /app
+# MySQL connection settings and API keys are supplied at runtime (see .env.example).
 ENV TZ=Asia/Shanghai \
     SPRING_PROFILES_ACTIVE=cloud \
     SERVER_ADDRESS=0.0.0.0 \

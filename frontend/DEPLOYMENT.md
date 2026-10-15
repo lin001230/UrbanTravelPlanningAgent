@@ -24,7 +24,7 @@
 `BACKEND_ORIGIN` 是**运行时环境变量**，在前端服务的版本配置中填写。例如后端接口为：
 
 ```text
-https://your-backend.example.com/api/agent/chat/stream
+https://your-backend.example.com/api/chat/stream
 ```
 
 则填写：
@@ -55,10 +55,14 @@ docker run --rm -p 8080:80 -e BACKEND_ORIGIN=https://your-backend.example.com ro
 ```powershell
 curl.exe -i http://localhost:8080/healthz
 curl.exe -i http://localhost:8080/api/v3/api-docs
-curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深圳湾口岸" http://localhost:8080/api/agent/chat/stream
+curl.exe -i http://localhost:8080/api/chat
+curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深圳湾口岸" http://localhost:8080/api/chat/stream
 ```
 
-页面地址为 `http://localhost:8080`。`/healthz` 应返回 `ok`，API 文档应返回后端 JSON，聊天应逐步输出 SSE 数据。最后一个请求会实际调用后端智能体。云端部署后，将以上地址替换为前端 HTTPS 域名做同样验证。
+页面地址为 `http://localhost:8080`。`/healthz` 应返回 `ok`，API 文档应返回后端 JSON，`/api/chat` 应返回 `code=200` 的会话列表，聊天应逐步输出 SSE 数据。最后一个请求会实际调用后端智能体。云端部署后，将以上地址替换为前端 HTTPS 域名做同样验证。
+
+会话接口已统一到 `/api/chat`：列表用 GET，改标题用 PUT，删除用 DELETE；历史消息使用 `/api/chat/messages`，持续对话使用 `/api/chat/stream`。现有 Nginx 配置代理整个 `/api/` 并保留请求方法、路径和查询参数，因此无需为这些接口新增代理规则。
+前端从后端加载历史记录，不再用浏览器 localStorage 保存会话。发布前先按[后端部署文档](../DEPLOYMENT.md)配置 MySQL 并建表，再验证发送后刷新页面可以恢复历史、继续对话沿用同一个 `chatId`、修改标题和删除会话在刷新后仍然生效。
 
 ## 流式响应与排查
 

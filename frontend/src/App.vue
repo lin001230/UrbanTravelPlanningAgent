@@ -1,18 +1,19 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowDown, ArrowRight, ArrowUp, Check, Clock3, Copy,
   Footprints, Leaf, MapPin, Menu, MessageCircle, PanelLeftClose,
-  Plus, RefreshCw, Route, Search, ShieldCheck, Sparkles, TrainFront,
-  Trash2, X,
+  PencilLine, Plus, RefreshCw, Route, Search, ShieldCheck, Sparkles, TrainFront,
+  Trash2,
 } from 'lucide-vue-next'
 import MessageContent from './components/MessageContent.vue'
-import { getChatError, sendChatStream } from './api/chat'
+import { deleteChat, getChatError, getChatMessages, getChats, sendChatStream, updateChatTitle } from './api/chat'
 
-const STORAGE_KEY = 'routepilot.conversations.v1'
-const storageWarning = ref('')
-const conversations = ref(readConversations())
-const activeId = ref(conversations.value[0]?.id ?? null)
+const conversations = ref([])
+const activeId = ref(null)
+const listLoading = ref(true)
+const listError = ref('')
+const deletingIds = reactive(new Set())
 const input = ref('')
 const search = ref('')
 const preference = ref('智能推荐')
@@ -35,44 +36,75 @@ const scrollArea = ref(null)
 const showScrollButton = ref(false)
 const copiedId = ref(null)
 const toast = ref('')
+const deleteTarget = ref(null)
+const deleteCancelButton = ref(null)
+const renameTarget = ref(null)
+const renameTitle = ref('')
+const renameInput = ref(null)
+const renameBusy = ref(false)
+const renameError = ref('')
 let toastTimer
 let copyTimer
 let streamController
+let listVersion = 0
+let navigationVersion = 0
 
 const activeConversation = computed(() => conversations.value.find((item) => item.id === activeId.value))
 const messages = computed(() => activeConversation.value?.messages ?? [])
 const visibleConversations = computed(() => conversations.value.filter((item) => item.title.toLowerCase().includes(search.value.toLowerCase())))
 const isCurrentPending = computed(() => pending.value && pendingConversationId.value === activeId.value)
-const canSend = computed(() => input.value.trim().length > 0 && !pending.value)
+const canSend = computed(() => input.value.trim().length > 0 && !pending.value
+  && !listLoading.value && !listError.value && !activeConversation.value?.loading
+  && !activeConversation.value?.loadError && !deletingIds.has(activeId.value))
 
-function readConversations() {
+async function loadConversations(selectFirst = false) {
+  const version = ++listVersion
+  const navigation = navigationVersion
+  listLoading.value = true
+  listError.value = ''
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    if (!Array.isArray(stored)) return []
-    return stored.filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string' && Array.isArray(item.messages))
-      .slice(0, 30).map((item) => ({ ...item, messages: item.messages
-        .filter((message) => message && typeof message.id === 'string' && typeof message.content === 'string' && ['user', 'assistant'].includes(message.role))
-        .map((message) => ({
-          ...message,
-          steps: Array.isArray(message.steps) ? message.steps.filter((step) => step && typeof step.content === 'string') : [],
-          ...(message.status === 'streaming' ? {
-            status: 'error', error: true, errorText: '上次规划因页面关闭而中断，已保留收到的步骤。可重新尝试。',
-          } : {}),
-        })),
-      }))
-  } catch {
-    storageWarning.value = '浏览器暂时无法读取历史记录，本次对话仍可正常使用。'
-    return []
+    const sessions = await getChats()
+    if (version !== listVersion) return
+    const existing = new Map(conversations.value.map((conversation) => [conversation.id, conversation]))
+    const serverIds = new Set(sessions.map((session) => session.id))
+    const drafts = conversations.value.filter((conversation) => !serverIds.has(conversation.id)
+      && (!conversation.persisted || conversation.id === pendingConversationId.value))
+    conversations.value = [...drafts, ...sessions.map((session) => {
+      const conversation = existing.get(session.id) || { messages: [], loaded: false }
+      Object.assign(conversation, session, { persisted: true })
+      return conversation
+    })]
+    if (activeId.value && !conversations.value.some((conversation) => conversation.id === activeId.value)) {
+      activeId.value = null
+    }
+    if (selectFirst && navigation === navigationVersion && !activeId.value && conversations.value.length) {
+      await selectConversation(conversations.value[0].id)
+    }
+  } catch (error) {
+    if (version === listVersion) listError.value = getChatError(error)
+  } finally {
+    if (version === listVersion) listLoading.value = false
   }
 }
 
-watch(conversations, (value) => {
+async function loadMessages(conversation, force = false) {
+  if (conversation.id === pendingConversationId.value || conversation.loading
+      || (conversation.loaded && !force)) return
+  conversation.loading = true
+  conversation.loadError = ''
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value.slice(0, 30)))
-  } catch {
-    storageWarning.value = '本地存储空间不足或不可用，刷新后可能无法保留本次对话。'
+    const history = await getChatMessages(conversation.id)
+    if (!conversations.value.includes(conversation)) return
+    conversation.messages = history
+    conversation.loaded = true
+  } catch (error) {
+    conversation.loadError = getChatError(error)
+  } finally {
+    conversation.loading = false
   }
-}, { deep: true })
+}
+
+onMounted(() => loadConversations(true))
 
 watch(input, async () => {
   await nextTick()
@@ -100,23 +132,97 @@ function handleScroll() {
 }
 
 function newConversation() {
+  navigationVersion++
   activeId.value = null
   input.value = ''
   sidebarOpen.value = false
   nextTick(() => textarea.value?.focus())
 }
 
-function selectConversation(id) {
+async function selectConversation(id) {
+  navigationVersion++
   activeId.value = id
   input.value = ''
   sidebarOpen.value = false
-  scrollToBottom()
+  const conversation = activeConversation.value
+  if (conversation) await loadMessages(conversation)
+  if (activeId.value === id) scrollToBottom()
 }
 
-function deleteConversation(id) {
-  if (pending.value && pendingConversationId.value === id) return
-  conversations.value = conversations.value.filter((item) => item.id !== id)
-  if (activeId.value === id) activeId.value = null
+function handleEscape() {
+  if (renameTarget.value) {
+    cancelRename()
+    return
+  }
+  if (deleteTarget.value) {
+    cancelDelete()
+    return
+  }
+  sidebarOpen.value = false
+}
+
+function requestDelete(conversation) {
+  if (listLoading.value || (pending.value && pendingConversationId.value === conversation.id) || deletingIds.has(conversation.id)) return
+  deleteTarget.value = conversation
+  nextTick(() => deleteCancelButton.value?.focus())
+}
+
+function cancelDelete() {
+  deleteTarget.value = null
+}
+
+async function confirmDelete() {
+  const target = deleteTarget.value
+  deleteTarget.value = null
+  if (!target) return
+  const id = target.id
+  const index = conversations.value.findIndex((item) => item.id === id)
+  if (index === -1) return
+  deletingIds.add(id)
+  try {
+    await deleteChat(id)
+    conversations.value = conversations.value.filter((conversation) => conversation.id !== id)
+    if (activeId.value === id) newConversation()
+    notify('对话已删除')
+  } catch (error) {
+    notify(`删除对话失败。${getChatError(error)}`)
+  } finally {
+    deletingIds.delete(id)
+  }
+}
+
+function requestRename(conversation) {
+  if (listLoading.value || deletingIds.has(conversation.id) || !conversation.persisted) return
+  renameTarget.value = conversation
+  renameTitle.value = conversation.title
+  renameError.value = ''
+  nextTick(() => { renameInput.value?.focus(); renameInput.value?.select() })
+}
+
+function cancelRename() {
+  if (!renameBusy.value) renameTarget.value = null
+}
+
+async function confirmRename() {
+  const conversation = renameTarget.value
+  const title = renameTitle.value.trim()
+  if (!conversation || renameBusy.value) return
+  if (!title || [...title].length > 64) {
+    renameError.value = '请输入 1–64 个字符的标题。'
+    return
+  }
+  renameBusy.value = true
+  renameError.value = ''
+  try {
+    await updateChatTitle(conversation.id, title)
+    conversation.title = title
+    renameTarget.value = null
+    notify('标题已更新')
+  } catch (error) {
+    renameError.value = getChatError(error)
+  } finally {
+    renameBusy.value = false
+  }
 }
 
 function useExample(example) {
@@ -129,7 +235,7 @@ async function submit() {
   const text = input.value.trim()
   const request = preference.value === '智能推荐' ? text : `${text}\n出行偏好：${preference.value}。`
   if (!activeConversation.value) {
-    const conversation = { id: crypto.randomUUID(), title: text.slice(0, 26), messages: [] }
+    const conversation = { id: crypto.randomUUID(), title: text.slice(0, 26), messages: [], loaded: true, persisted: false }
     conversations.value.unshift(conversation)
     activeId.value = conversation.id
   }
@@ -154,6 +260,7 @@ async function requestReply(conversation, request, failedMessage) {
   scrollToBottom(true)
   try {
     await sendChatStream(request, {
+      chatId: conversation.id,
       signal: controller.signal,
       onEvent(event) {
         if (event.type === 'final') {
@@ -165,6 +272,8 @@ async function requestReply(conversation, request, failedMessage) {
         if (activeId.value === conversation.id && !showScrollButton.value) scrollToBottom()
       },
     })
+    // 最终事件由后端在持久化成功后发送，此时刷新列表不会读到旧会话状态。
+    await loadConversations()
   } catch (error) {
     reply.status = 'error'
     reply.error = true
@@ -181,7 +290,8 @@ async function requestReply(conversation, request, failedMessage) {
 }
 
 function retry(message) {
-  if (!pending.value && activeConversation.value && typeof message.request === 'string') {
+  if (!pending.value && !activeConversation.value?.loading && !activeConversation.value?.loadError
+      && activeConversation.value && typeof message.request === 'string') {
     requestReply(activeConversation.value, message.request, message)
   }
 }
@@ -213,7 +323,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" @keydown.esc="sidebarOpen = false">
+  <div class="app-shell" @keydown.esc="handleEscape">
     <button v-if="sidebarOpen" class="sidebar-backdrop" aria-label="关闭侧栏" @click="sidebarOpen = false"></button>
     <aside class="sidebar" :class="{ 'is-open': sidebarOpen }">
       <a class="brand" href="#" aria-label="路小行首页" @click.prevent="newConversation">
@@ -223,13 +333,16 @@ onBeforeUnmount(() => {
       <button class="mobile-close icon-button" aria-label="关闭侧栏" @click="sidebarOpen = false"><PanelLeftClose :size="20" /></button>
       <button class="new-chat" @click="newConversation"><Plus :size="18" />开启新对话<span>NEW</span></button>
       <label class="history-search"><Search :size="16" /><input v-model="search" aria-label="搜索历史对话" placeholder="搜索历史对话" /></label>
-      <div class="history-heading"><span>最近对话</span><span>{{ conversations.length.toString().padStart(2, '0') }}</span></div>
+      <div class="history-heading"><span>最近对话 · {{ conversations.length }}</span><button class="icon-button history-refresh" :disabled="listLoading" aria-label="刷新会话列表" @click="loadConversations()"><RefreshCw :size="13" :class="{ spinning: listLoading }" /></button></div>
       <nav class="history-list" aria-label="历史对话">
+        <p v-if="listLoading && !conversations.length" class="history-state" role="status">正在加载会话…</p>
+        <div v-if="listError" class="history-state history-error" role="alert"><p>{{ listError }}</p><button class="retry-button" @click="loadConversations(true)"><RefreshCw :size="13" />重新加载会话</button></div>
         <div v-for="conversation in visibleConversations" :key="conversation.id" class="history-item" :class="{ active: activeId === conversation.id }">
-          <button class="history-select" :aria-current="activeId === conversation.id ? 'page' : undefined" @click="selectConversation(conversation.id)"><MessageCircle :size="16" /><span>{{ conversation.title }}</span></button>
-          <button class="delete-chat icon-button" :disabled="pending && pendingConversationId === conversation.id" :aria-label="`删除对话：${conversation.title}`" @click="deleteConversation(conversation.id)"><Trash2 :size="14" /></button>
+          <button class="history-select" :disabled="deletingIds.has(conversation.id)" :aria-current="activeId === conversation.id ? 'page' : undefined" :title="conversation.title" @click="selectConversation(conversation.id)"><MessageCircle :size="16" /><span>{{ conversation.title }}</span></button>
+          <button class="history-action icon-button" :disabled="listLoading || !conversation.persisted || deletingIds.has(conversation.id)" :aria-label="`重命名对话：${conversation.title}`" @click="requestRename(conversation)"><PencilLine :size="13" /></button>
+          <button class="history-action delete-chat icon-button" :disabled="listLoading || deletingIds.has(conversation.id) || (pending && pendingConversationId === conversation.id)" :aria-label="`删除对话：${conversation.title}`" @click="requestDelete(conversation)"><Trash2 :size="14" /></button>
         </div>
-        <div v-if="!visibleConversations.length" class="history-empty">
+        <div v-if="!visibleConversations.length && !listLoading && !listError" class="history-empty">
           <MessageCircle :size="24" :stroke-width="1.4" />
           <p>{{ search ? '没有找到相关对话' : '每一次出发，都从这里开始' }}</p>
           <span>{{ search ? '换个关键词试试' : '你的路线规划会保存在这里' }}</span>
@@ -237,20 +350,20 @@ onBeforeUnmount(() => {
       </nav>
       <div class="sidebar-bottom">
         <div class="green-note"><span class="leaf-icon"><Leaf :size="19" /></span><div><strong>让城市，近一点</strong><p>搭乘地铁，轻松低碳出行</p></div></div>
-        <div class="local-note"><ShieldCheck :size="14" /><span>对话记录仅保存在当前浏览器</span></div>
+        <div class="local-note"><ShieldCheck :size="14" /><span>对话记录已开启服务端保存</span></div>
       </div>
     </aside>
 
     <main class="main-panel">
       <header class="topbar">
-        <div class="topbar-title"><button class="mobile-menu icon-button" aria-label="打开侧栏" :aria-expanded="sidebarOpen" @click="sidebarOpen = true"><Menu :size="21" /></button><span>地铁出行助手</span><span class="ai-badge">AI</span></div>
+        <div class="topbar-title"><button class="mobile-menu icon-button" aria-label="打开侧栏" :aria-expanded="sidebarOpen" @click="sidebarOpen = true"><Menu :size="21" /></button><span class="current-title" :title="activeConversation?.title">{{ activeConversation?.title || '地铁出行助手' }}</span><span class="ai-badge">AI</span></div>
         <div class="topbar-caption"><span class="status-dot"></span>每一程，都有好路线</div>
       </header>
 
-      <div v-if="storageWarning" class="storage-warning" role="status">{{ storageWarning }}<button class="icon-button" aria-label="关闭提示" @click="storageWarning = ''"><X :size="16" /></button></div>
-
       <div ref="scrollArea" class="conversation-scroll" @scroll="handleScroll">
-        <section v-if="!messages.length" class="welcome">
+        <section v-if="activeConversation?.loading" class="conversation-state" role="status"><RefreshCw class="spinning" :size="22" /><p>正在加载聊天记录…</p></section>
+        <section v-else-if="activeConversation?.loadError" class="conversation-state" role="alert"><p>{{ activeConversation.loadError }}</p><button class="retry-button" @click="loadMessages(activeConversation, true)"><RefreshCw :size="14" />重新加载聊天记录</button></section>
+        <section v-else-if="!messages.length" class="welcome">
           <div class="welcome-symbol"><TrainFront :size="39" :stroke-width="1.55" /><span><Sparkles :size="14" /></span></div>
           <div class="eyebrow">YOUR EVERYDAY METRO COMPANION</div>
           <h1>下一站，<span>想去哪里？</span></h1>
@@ -312,5 +425,30 @@ onBeforeUnmount(() => {
       </div>
       <Transition name="toast"><div v-if="toast" class="toast-message" role="status">{{ toast }}</div></Transition>
     </main>
+
+    <Transition name="fade">
+      <div v-if="deleteTarget" class="confirm-backdrop" @click.self="cancelDelete">
+        <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-desc">
+          <h2 id="confirm-delete-title">删除这个对话？</h2>
+          <p id="confirm-delete-desc">「{{ deleteTarget.title }}」的聊天记录将从服务端删除，且无法恢复。</p>
+          <div class="confirm-actions">
+            <button ref="deleteCancelButton" type="button" class="confirm-cancel" @click="cancelDelete">取消</button>
+            <button type="button" class="confirm-delete-btn" @click="confirmDelete">确认删除</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+    <Transition name="fade">
+      <div v-if="renameTarget" class="confirm-backdrop" @click.self="cancelRename">
+        <form class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title" @submit.prevent="confirmRename">
+          <h2 id="rename-title">重命名对话</h2>
+          <label class="sr-only" for="chat-title-input">会话标题</label>
+          <input id="chat-title-input" ref="renameInput" v-model="renameTitle" class="rename-input" :disabled="renameBusy" maxlength="128" autocomplete="off" aria-describedby="rename-hint" />
+          <p id="rename-hint">为这段对话起一个名字，最多 64 个字符。</p>
+          <p v-if="renameError" class="rename-error" role="alert">{{ renameError }}</p>
+          <div class="confirm-actions"><button type="button" class="confirm-cancel" :disabled="renameBusy" @click="cancelRename">取消</button><button type="submit" class="confirm-delete-btn" :disabled="renameBusy || !renameTitle.trim()">{{ renameBusy ? '保存中…' : '保存标题' }}</button></div>
+        </form>
+      </div>
+    </Transition>
   </div>
 </template>

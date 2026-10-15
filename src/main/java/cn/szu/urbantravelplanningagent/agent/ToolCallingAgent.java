@@ -7,7 +7,9 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -15,6 +17,7 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -51,17 +54,17 @@ public class ToolCallingAgent extends ReActAgent {
      */
     @Override
     public boolean think() {
-        if (nextStepPrompt != null && !nextStepPrompt.isEmpty()) {
-            getMessageList().add(new AssistantMessage(nextStepPrompt));
-        }
         try {
-            Prompt prompt = Prompt.builder().chatOptions(chatOptions).messages(getMessageList()).build();
+            List<Message> promptMessages = new ArrayList<>(getMessageList());
+            promptMessages.add(new AssistantMessage(this.nextStepPrompt));
+            Prompt prompt = Prompt.builder().chatOptions(chatOptions).messages(promptMessages).build();
             ChatResponse chatResponse = chatClient
                     .prompt(prompt)
                     .system(getSystemPrompt())
                     .toolCallbacks(getAvailableTools())
                     .call()
                     .chatResponse();
+            // 保存下来推理结果
             this.toolCallChatResponse = chatResponse;
             if (chatResponse == null) { // 如果 chatResponse 为null，抛出异常
                 log.warn("ChatResponse is null");
@@ -78,7 +81,11 @@ public class ToolCallingAgent extends ReActAgent {
             String assistantText = assistantMessage.getText();
             // null/空值 处理
             assistantText = assistantText == null ? "" : assistantText;
-            getMessageList().add(new AssistantMessage(assistantText));
+            if (!assistantMessage.hasToolCalls()) {
+                // 不需要调用工具时，将推理结果加入消息列表
+                getMessageList().add(new AssistantMessage(assistantText));
+            }
+            // 设置推理结果
             this.setThinkResult(assistantMessage.getText());
             return assistantMessage.hasToolCalls();
         } catch (Exception e) {
@@ -93,7 +100,7 @@ public class ToolCallingAgent extends ReActAgent {
     @Override
     public String act() {
         if (!toolCallChatResponse.hasToolCalls()) {
-            return "";
+            return "不需要进行工具调用";
         }
 
         try {

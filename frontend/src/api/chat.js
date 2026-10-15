@@ -4,11 +4,37 @@ import { createSseParser, parseAgentEvent } from './sse'
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   adapter: 'fetch',
-  responseType: 'stream',
-  headers: { Accept: 'text/event-stream' },
+  timeout: 15000,
+  headers: { Accept: 'application/json' },
 })
 
-export async function sendChatStream(message, { onEvent, signal } = {}) {
+function unwrap(result) {
+  if (result?.code !== 200) {
+    throw new Error(result?.message || '请求未成功，请稍后重试。')
+  }
+  return result.data
+}
+
+export async function getChats() {
+  const { data } = await client.get('/chat')
+  const chats = unwrap(data)
+  if (!Array.isArray(chats)) throw new Error('会话列表格式异常，请稍后重试。')
+  return chats
+}
+
+export async function getChatMessages(chatId) {
+  const { data } = await client.get('/chat/messages', { params: { chatId } })
+  const messages = unwrap(data)
+  if (!Array.isArray(messages)) throw new Error('历史消息格式异常，请稍后重试。')
+  return messages.map((message) => ({ ...message, steps: message.steps ?? [], status: 'done' }))
+}
+
+export async function updateChatTitle(chatId, title) {
+  const { data } = await client.put('/chat', null, { params: { chatId, title } })
+  unwrap(data)
+}
+
+export async function sendChatStream(message, { chatId, onEvent, signal } = {}) {
   const controller = new AbortController()
   const abort = () => controller.abort(signal.reason)
   signal?.addEventListener('abort', abort, { once: true })
@@ -21,8 +47,9 @@ export async function sendChatStream(message, { onEvent, signal } = {}) {
   let completed = false
   let received = false
   try {
-    const { data, headers } = await client.get('/agent/chat/stream', {
-      params: { message }, signal: controller.signal,
+    const { data, headers } = await client.get('/chat/stream', {
+      params: { message, chatId }, signal: controller.signal,
+      responseType: 'stream', timeout: 0, headers: { Accept: 'text/event-stream' },
     })
     reader = data.getReader()
     if (!headers['content-type']?.toLowerCase().startsWith('text/event-stream')) {
@@ -69,6 +96,13 @@ export async function sendChatStream(message, { onEvent, signal } = {}) {
   }
 }
 
+export async function deleteChat(chatId) {
+  const { data } = await client.delete('/chat', {
+    params: { chatId },
+  })
+  unwrap(data)
+}
+
 export function getChatError(error) {
   if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
     return '这次规划用时较长，等待已超时。请稍后重试。'
@@ -77,7 +111,7 @@ export function getChatError(error) {
     if (!error.response || error.response.status >= 500) {
       return '暂时无法连接出行助手，请确认后端服务已启动，稍后重试。'
     }
-    return `请求未成功（${error.response.status}），请稍后重试。`
+    return error.response.data?.message || `请求未成功（${error.response.status}），请稍后重试。`
   }
   return error.message || '路线规划暂时遇到问题，请重试。'
 }

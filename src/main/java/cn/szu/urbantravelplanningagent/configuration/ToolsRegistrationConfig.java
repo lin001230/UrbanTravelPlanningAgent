@@ -1,5 +1,6 @@
 package cn.szu.urbantravelplanningagent.configuration;
 
+import cn.szu.urbantravelplanningagent.tool.GetCurrentDateTimeTool;
 import cn.szu.urbantravelplanningagent.tool.SearchOnInternetTool;
 import cn.szu.urbantravelplanningagent.tool.TerminateTool;
 import org.springframework.ai.support.ToolCallbacks;
@@ -16,7 +17,7 @@ import java.util.List;
  * 工具注册配置类，用于注册自定义工具
  */
 @Configuration
-public class ToolsRegistrationConfiguration {
+public class ToolsRegistrationConfig {
 
     @Bean
     public ToolCallback[] toolCallbacks(ObjectProvider<ToolCallbackProvider> toolCallbackProvider) {
@@ -24,9 +25,13 @@ public class ToolsRegistrationConfiguration {
         SearchOnInternetTool searchOnInternetTool = new SearchOnInternetTool();
         // 终止工具
         TerminateTool terminateTool = new TerminateTool();
+        // 获取当前时间工具
+        GetCurrentDateTimeTool getCurrentDateTimeTool = new GetCurrentDateTimeTool();
 
+        // 注册自定义工具
         List<ToolCallback> toolCallbackList = new ArrayList<>(List.of(ToolCallbacks.from(
                 searchOnInternetTool,
+                getCurrentDateTimeTool,
                 terminateTool
         )));
 

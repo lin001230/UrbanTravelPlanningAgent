@@ -1,6 +1,7 @@
 package cn.szu.urbantravelplanningagent.controller;
 
 import cn.szu.urbantravelplanningagent.agent.MyAgent;
+import cn.szu.urbantravelplanningagent.context.LoginUserContext;
 import cn.szu.urbantravelplanningagent.dto.ChatMessageView;
 import cn.szu.urbantravelplanningagent.entity.ChatSessionEntity;
 import cn.szu.urbantravelplanningagent.result.Result;
@@ -47,7 +48,7 @@ public class ChatController {
      */
     @GetMapping
     public Result<List<ChatSessionEntity>> getChatList() {
-        return Result.success(chatMessagesService.getChatList());
+        return Result.success(chatMessagesService.getChatList(LoginUserContext.getUserId()));
     }
 
     /**

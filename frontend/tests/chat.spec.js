@@ -57,6 +57,26 @@ async function mockBackend(page, sessions = [], messages = {}) {
   })
   return state
 }
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('routepilot.token', 'test-token')
+    localStorage.setItem('routepilot.user', JSON.stringify({ id: 1, username: 'lin_01', nickname: '小林' }))
+  })
+})
+
+test('opens the login page when there is no token and does not load chats', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem('routepilot.token')
+    localStorage.removeItem('routepilot.user')
+  })
+  let chatRequests = 0
+  await page.route(/\/api\/chat(?:\/|\?|$)/, () => { chatRequests += 1 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '返回助手' })).toHaveCount(0)
+  expect(chatRequests).toBe(0)
+})
+
 const composer = (page) => page.getByRole('textbox', { name: '描述你的地铁出行需求' })
 async function send(page, text) {
   await composer(page).fill(text)

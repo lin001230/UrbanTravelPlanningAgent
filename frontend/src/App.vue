@@ -2,16 +2,19 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowDown, ArrowRight, ArrowUp, Check, Clock3, Copy,
-  Footprints, Leaf, MapPin, Menu, MessageCircle, PanelLeftClose,
+  Footprints, Leaf, LogOut, MapPin, Menu, MessageCircle, PanelLeftClose,
   PencilLine, Plus, RefreshCw, Route, Search, ShieldCheck, Sparkles, TrainFront,
-  Trash2,
+  Trash2, UserRound,
 } from 'lucide-vue-next'
+import AuthView from './components/AuthView.vue'
 import MessageContent from './components/MessageContent.vue'
+import { clearSession, logoutAccount, readStoredUser } from './api/auth'
+import { isUnauthorizedError, onUnauthorized, readStoredToken } from './api/http'
 import { deleteChat, getChatError, getChatMessages, getChats, sendChatStream, updateChatTitle } from './api/chat'
 
 const conversations = ref([])
 const activeId = ref(null)
-const listLoading = ref(true)
+const listLoading = ref(Boolean(readStoredToken()))
 const listError = ref('')
 const deletingIds = reactive(new Set())
 const input = ref('')
@@ -36,6 +39,9 @@ const scrollArea = ref(null)
 const showScrollButton = ref(false)
 const copiedId = ref(null)
 const toast = ref('')
+const currentUser = ref(readStoredToken() ? readStoredUser() : null)
+const showAuth = ref(!readStoredToken())
+const signingOut = ref(false)
 const deleteTarget = ref(null)
 const deleteCancelButton = ref(null)
 const renameTarget = ref(null)
@@ -46,10 +52,14 @@ const renameError = ref('')
 let toastTimer
 let copyTimer
 let streamController
+let stopAuthWatch
 let listVersion = 0
 let navigationVersion = 0
 
 const activeConversation = computed(() => conversations.value.find((item) => item.id === activeId.value))
+const displayName = computed(() => currentUser.value?.nickname || currentUser.value?.username || '')
+const userInitial = computed(() => [...displayName.value][0] || '我')
+const showAccountName = computed(() => Boolean(currentUser.value?.nickname) && currentUser.value.nickname !== currentUser.value.username)
 const messages = computed(() => activeConversation.value?.messages ?? [])
 const visibleConversations = computed(() => conversations.value.filter((item) => item.title.toLowerCase().includes(search.value.toLowerCase())))
 const isCurrentPending = computed(() => pending.value && pendingConversationId.value === activeId.value)
@@ -81,7 +91,7 @@ async function loadConversations(selectFirst = false) {
       await selectConversation(conversations.value[0].id)
     }
   } catch (error) {
-    if (version === listVersion) listError.value = getChatError(error)
+    if (version === listVersion && !isUnauthorizedError(error)) listError.value = getChatError(error)
   } finally {
     if (version === listVersion) listLoading.value = false
   }
@@ -98,13 +108,31 @@ async function loadMessages(conversation, force = false) {
     conversation.messages = history
     conversation.loaded = true
   } catch (error) {
-    conversation.loadError = getChatError(error)
+    if (!isUnauthorizedError(error)) conversation.loadError = getChatError(error)
   } finally {
     conversation.loading = false
   }
 }
 
-onMounted(() => loadConversations(true))
+function enterLogin() {
+  clearSession()
+  currentUser.value = null
+  conversations.value = []
+  activeId.value = null
+  listError.value = ''
+  listLoading.value = false
+  sidebarOpen.value = false
+  showAuth.value = true
+}
+
+onMounted(() => {
+  stopAuthWatch = onUnauthorized(enterLogin)
+  if (!readStoredToken()) {
+    enterLogin()
+    return
+  }
+  loadConversations(true)
+})
 
 watch(input, async () => {
   await nextTick()
@@ -149,7 +177,32 @@ async function selectConversation(id) {
   if (activeId.value === id) scrollToBottom()
 }
 
+function openAuth() {
+  showAuth.value = true
+  sidebarOpen.value = false
+}
+
+function handleAuthSuccess(user) {
+  currentUser.value = user
+  showAuth.value = false
+  notify(`欢迎，${user.nickname || user.username}`)
+  loadConversations(true)
+}
+
+function signOut() {
+  if (signingOut.value) return
+  signingOut.value = true
+  logoutAccount()
+  signingOut.value = false
+  enterLogin()
+  notify('已退出登录')
+}
+
 function handleEscape() {
+  if (showAuth.value) {
+    if (currentUser.value) showAuth.value = false
+    return
+  }
   if (renameTarget.value) {
     cancelRename()
     return
@@ -185,7 +238,7 @@ async function confirmDelete() {
     if (activeId.value === id) newConversation()
     notify('对话已删除')
   } catch (error) {
-    notify(`删除对话失败。${getChatError(error)}`)
+    if (!isUnauthorizedError(error)) notify(`删除对话失败。${getChatError(error)}`)
   } finally {
     deletingIds.delete(id)
   }
@@ -219,7 +272,7 @@ async function confirmRename() {
     renameTarget.value = null
     notify('标题已更新')
   } catch (error) {
-    renameError.value = getChatError(error)
+    if (!isUnauthorizedError(error)) renameError.value = getChatError(error)
   } finally {
     renameBusy.value = false
   }
@@ -275,6 +328,7 @@ async function requestReply(conversation, request, failedMessage) {
     // 最终事件由后端在持久化成功后发送，此时刷新列表不会读到旧会话状态。
     await loadConversations()
   } catch (error) {
+    if (isUnauthorizedError(error)) return
     reply.status = 'error'
     reply.error = true
     reply.errorText = getChatError(error)
@@ -316,6 +370,7 @@ async function copyMessage(message) {
 }
 
 onBeforeUnmount(() => {
+  stopAuthWatch?.()
   streamController?.abort(new Error('页面已关闭，流式接收已停止。'))
   clearTimeout(copyTimer)
   clearTimeout(toastTimer)
@@ -323,7 +378,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" @keydown.esc="handleEscape">
+  <div class="app-root" @keydown.esc="handleEscape">
+  <div class="app-shell" :inert="showAuth || undefined">
     <button v-if="sidebarOpen" class="sidebar-backdrop" aria-label="关闭侧栏" @click="sidebarOpen = false"></button>
     <aside class="sidebar" :class="{ 'is-open': sidebarOpen }">
       <a class="brand" href="#" aria-label="路小行首页" @click.prevent="newConversation">
@@ -349,6 +405,12 @@ onBeforeUnmount(() => {
         </div>
       </nav>
       <div class="sidebar-bottom">
+        <button v-if="!currentUser" type="button" class="account-chip" @click="openAuth"><UserRound :size="16" /><span>登录 / 注册</span></button>
+        <div v-else class="account-chip is-signed-in">
+          <span class="account-avatar" aria-hidden="true">{{ userInitial }}</span>
+          <span class="account-label"><strong>{{ displayName }}</strong><small v-if="showAccountName">{{ currentUser.username }}</small></span>
+          <button type="button" class="account-logout" :disabled="signingOut" @click="signOut"><LogOut :size="14" />{{ signingOut ? '退出中' : '退出' }}</button>
+        </div>
         <div class="green-note"><span class="leaf-icon"><Leaf :size="19" /></span><div><strong>让城市，近一点</strong><p>搭乘地铁，轻松低碳出行</p></div></div>
         <div class="local-note"><ShieldCheck :size="14" /><span>对话记录已开启服务端保存</span></div>
       </div>
@@ -450,5 +512,7 @@ onBeforeUnmount(() => {
         </form>
       </div>
     </Transition>
+  </div>
+  <AuthView v-if="showAuth" :required="!currentUser" @close="showAuth = false" @success="handleAuthSuccess" />
   </div>
 </template>

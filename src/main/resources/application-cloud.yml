@@ -6,7 +6,7 @@ spring:
     password: ${MYSQL_PASSWORD}
   sql:
     init:
-      # Create the two tables with schema.sql before deploying, not on each startup.
+      # Initialize the database with schema.sql manually, not on each startup.
       mode: never
   ai:
     dashscope:
@@ -30,3 +30,8 @@ spring:
 
 search-api:
   api-key: ${SEARCH_API_KEY}
+
+app:
+  jwt:
+    # Optional at startup. Set JWT_SECRET in the cloud console before serving real users.
+    secret: ${JWT_SECRET:urban-travel-planning-agent-secret}

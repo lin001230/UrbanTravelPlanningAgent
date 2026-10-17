@@ -21,7 +21,7 @@ public interface ChatSessionMapper {
      * 新增会话信息到数据库
      * @param build
      */
-    @Insert("INSERT INTO chat_session (id, title, status, created_at, updated_at, last_active_at) VALUES (#{id}, #{title}, #{status}, #{createdAt}, #{updatedAt}, #{lastActiveAt})")
+    @Insert("INSERT INTO chat_session (id, user_id, title, status, created_at, updated_at, last_active_at) VALUES (#{id}, #{userId}, #{title}, #{status}, #{createdAt}, #{updatedAt}, #{lastActiveAt})")
     void insert(ChatSessionEntity build);
 
     /**
@@ -50,8 +50,8 @@ public interface ChatSessionMapper {
      * 查询会话列表
      * @return
      */
-    @Select("select * from chat_session where status = 1 order by last_active_at desc, id desc")
-    List<ChatSessionEntity> list();
+    @Select("select * from chat_session where status = 1 and user_id = #{userId} order by last_active_at desc, id desc")
+    List<ChatSessionEntity> list(@Param("userId") Long userId);
 
     /**
      * 更新会话标题

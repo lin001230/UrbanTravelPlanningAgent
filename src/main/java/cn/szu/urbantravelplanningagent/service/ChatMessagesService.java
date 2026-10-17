@@ -44,7 +44,7 @@ public interface ChatMessagesService {
      * 获取会话列表
      * @return
      */
-    List<ChatSessionEntity> getChatList();
+    List<ChatSessionEntity> getChatList(Long userId);
 
     /**
      * 更新会话标题

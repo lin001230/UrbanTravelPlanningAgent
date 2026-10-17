@@ -32,6 +32,6 @@ RUN node --version \
 COPY --from=build --chown=app:app /build/target/*.jar /app/app.jar
 USER app
 
-# Set the WeChat Cloud Hosting service port to the same value.
+# Cloud hosting service port must match. HTTP health check path is /api/health.
 EXPOSE 8888
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

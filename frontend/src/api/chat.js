@@ -1,12 +1,6 @@
 import axios from 'axios'
+import { http as client, isUnauthorizedError } from './http'
 import { createSseParser, parseAgentEvent } from './sse'
-
-const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  adapter: 'fetch',
-  timeout: 15000,
-  headers: { Accept: 'application/json' },
-})
 
 function unwrap(result) {
   if (result?.code !== 200) {
@@ -104,6 +98,7 @@ export async function deleteChat(chatId) {
 }
 
 export function getChatError(error) {
+  if (isUnauthorizedError(error)) return ''
   if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
     return '这次规划用时较长，等待已超时。请稍后重试。'
   }

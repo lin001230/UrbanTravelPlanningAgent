@@ -20,6 +20,8 @@ server {
         proxy_set_header Connection "";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Login uses a Bearer token. Forward it explicitly; an empty value is omitted.
+        proxy_set_header Authorization $http_authorization;
 
         # HTTPS backend domains require their own Host header and TLS SNI.
         proxy_ssl_server_name on;

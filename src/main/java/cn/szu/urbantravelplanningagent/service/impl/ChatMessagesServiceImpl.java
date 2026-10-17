@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONUtil;
 import cn.szu.urbantravelplanningagent.constant.SessionStatus;
+import cn.szu.urbantravelplanningagent.context.LoginUserContext;
 import cn.szu.urbantravelplanningagent.dto.ChatMessageView;
 import cn.szu.urbantravelplanningagent.entity.ChatMessageEntity;
 import cn.szu.urbantravelplanningagent.entity.ChatSessionEntity;
@@ -182,6 +183,7 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
             // 新会话，新增会话表记录
             chatSession = ChatSessionEntity.builder()
                     .id(chatId)
+                    .userId(LoginUserContext.getUserId())
                     .title(userMessage.substring(0, Math.min(userMessage.length(), 20)))
                     .status(SessionStatus.ACTIVE)
                     .createdAt(LocalDateTime.now())
@@ -230,8 +232,8 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
      * @return
      */
     @Override
-    public List<ChatSessionEntity> getChatList() {
-        return chatSessionMapper.list();
+    public List<ChatSessionEntity> getChatList(Long userId) {
+        return chatSessionMapper.list(userId);
     }
 
     /**

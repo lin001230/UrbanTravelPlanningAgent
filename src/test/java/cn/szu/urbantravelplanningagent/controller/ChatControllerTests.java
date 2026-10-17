@@ -36,7 +36,7 @@ class ChatControllerTests {
 
     @Test
     void listAndHistoryHaveDistinctRoutesAndStableResponseShapes() throws Exception {
-        when(service.getChatList()).thenReturn(List.of(
+        when(service.getChatList(isNull())).thenReturn(List.of(
                 ChatSessionEntity.builder().id("chat-1").title("路线规划").build()));
         when(service.getChatHistory("chat-1")).thenReturn(List.of(
                 new ChatMessageView("u1", "t1", "user", "原始提问", List.of())));

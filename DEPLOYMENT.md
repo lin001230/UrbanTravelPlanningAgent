@@ -22,6 +22,9 @@
 | `MYSQL_DATABASE` | 已创建的数据库名称，默认 `urban_travel_planning_agent` |
 | `MYSQL_USERNAME` | 具有会话、消息表读写权限的数据库用户名 |
 | `MYSQL_PASSWORD` | 数据库密码 |
+| `JWT_SECRET` | 登录令牌签名密钥。不配置时使用镜像内置默认值，进程可以启动；正式环境应换成足够长的随机字符串 |
+
+`JWT_SECRET` 只在运行时读取，不要写进镜像。令牌有效期仍为 2 小时。
 
 `application-cloud.yml` 使用这些变量生成 JDBC URL，不再连接容器内的 `localhost:3306`。
 数据库的连接信息只配置到后端服务；前端仍只需要 `BACKEND_ORIGIN`。
@@ -32,9 +35,11 @@
 
 ## 数据库准备
 
-先创建 MySQL 8.0+ 数据库（字符集 `utf8mb4`），选择该数据库后执行 [`src/main/resources/schema.sql`](src/main/resources/schema.sql)，依次创建 `chat_session`、`chat_message` 两张表。
-如果云端已经建好这两张表，确认字段和脚本一致即可；`CREATE TABLE IF NOT EXISTS` 不会修改已有表结构。
-云端已显式设置 `spring.sql.init.mode=never`，启动应用不会自动建表或修改表结构，镜像构建也不需要连接数据库。
+新的空库使用具备建库、建表权限的账号执行 [`src/main/resources/schema.sql`](src/main/resources/schema.sql)。脚本面向 MySQL 5.7.8+ / 8.x，会删除并重建 `app_user`、`chat_session`、`chat_message` 三张空表，不插入初始账号或消息。已有云端库不要执行这个脚本，否则会话和消息会被清空。
+
+当前代码在注册、登录和新建会话时会访问 `app_user`，并写入 `chat_session.user_id`。已有云端库在发布新版本前执行一次 [`src/main/resources/migrations/001_add_app_user_and_session_owner.sql`](src/main/resources/migrations/001_add_app_user_and_session_owner.sql)：新增用户表，并为会话表补上可空的 `user_id`。已有会话保留，但没有所有者，不会出现在登录后的会话列表中。该脚本里的 `ALTER TABLE` 只执行一次；列或索引已存在时删掉对应语句再执行。
+
+云端已显式设置 `spring.sql.init.mode=never`，启动应用不会自动建表或修改表结构，镜像构建也不需要连接数据库。MySQL 驱动版本需要与实际服务端版本匹配。
 
 确保云托管后端容器能够连接该 MySQL 地址和端口，并配置好数据库侧允许的访问来源。`localhost` 指向后端容器自身，不能用于连接外部 MySQL。
 
@@ -52,7 +57,7 @@ docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 本地 `.env` 使用 `变量名=值` 的格式，参考根目录 `.env.example` 填写 API 和数据库连接信息；该文件已被 `.gitignore` 和 `.dockerignore` 排除。
 在 Docker Desktop 中连接电脑上运行的 MySQL 时，可以使用 `MYSQL_HOST=host.docker.internal`；云端应替换为实际可达的数据库地址。
 `.env` 由 `docker run --env-file` 注入；直接使用 Maven 或 IDE 启动时，仍需在进程环境变量中配置相应的值。
-启动后访问 `http://localhost:8888/api/swagger-ui.html` 检查服务。
+启动后访问 `http://localhost:8888/api/health`，应返回纯文本 `ok`。这个地址不访问数据库，也不要求登录，可作为云托管 HTTP 健康检查路径；检查端口仍是 **8888**。接口文档在 `http://localhost:8888/api/swagger-ui.html`。
 应用需能访问百炼、高德和 SearchApi.io；对话请求会调用外部服务。
 
 构建时运行 `ChatMessagesServiceImplTests`、`ChatControllerTests`，验证持久化转换逻辑和新的会话接口；跳过依赖真实数据库、API 和 MCP 的 Spring 上下文测试。
@@ -60,19 +65,31 @@ Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `no
 
 ## 会话接口验证
 
-后端部署后，先验证不调用模型的会话列表接口：
+后端部署后，先确认进程已监听，再验证登录。未带令牌访问会话列表应返回 HTTP 401。
 
 ```powershell
+curl.exe -i http://localhost:8888/api/health
 curl.exe -i http://localhost:8888/api/chat
+curl.exe -i -X POST http://localhost:8888/api/user/register -H "Content-Type: application/json" -d "{\"username\":\"demo_user\",\"password\":\"demo-pass\",\"nickname\":\"demo\"}"
+curl.exe -i -X POST http://localhost:8888/api/user/login -H "Content-Type: application/json" -d "{\"username\":\"demo_user\",\"password\":\"demo-pass\"}"
 ```
 
-应返回 HTTP 200，JSON 中 `code=200`，`data` 为会话列表，空库时为 `[]`。该请求也会实际访问数据库。
-然后按 [`frontend/DEPLOYMENT.md`](frontend/DEPLOYMENT.md) 部署前端，验证发送消息、刷新恢复历史、继续对话、修改标题和删除会话。
+`/api/health` 返回 `ok`。`/api/chat` 返回 HTTP 401，JSON 中 `code=401`。注册和登录在数据库升级完成后返回 `code=200`；登录结果里的 `data.token` 用于后续请求：
+
+```powershell
+curl.exe -i http://localhost:8888/api/chat -H "Authorization: Bearer 登录返回的token"
+```
+
+应返回 HTTP 200，JSON 中 `code=200`，`data` 为当前用户的会话列表，没有会话时为 `[]`。该请求会实际访问数据库。
+然后按 [`frontend/DEPLOYMENT.md`](frontend/DEPLOYMENT.md) 部署前端，验证注册登录、发送消息、刷新恢复历史、继续对话、修改标题和删除会话。
 当前接口包括：
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| GET | `/api/chat` | 查询会话列表 |
+| GET | `/api/health` | 存活检查，无需登录 |
+| POST | `/api/user/register` | 注册 |
+| POST | `/api/user/login` | 登录并返回令牌 |
+| GET | `/api/chat` | 查询当前用户的会话列表，需要 `Authorization: Bearer` |
 | GET | `/api/chat/messages?chatId=...` | 查询会话历史 |
 | PUT | `/api/chat?chatId=...&title=...` | 修改标题 |
 | DELETE | `/api/chat?chatId=...` | 删除会话及其消息 |

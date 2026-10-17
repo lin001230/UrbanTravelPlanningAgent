@@ -2,6 +2,7 @@ package cn.szu.urbantravelplanningagent.agent;
 
 import cn.szu.urbantravelplanningagent.constant.ModelStatus;
 import cn.szu.urbantravelplanningagent.service.ChatMessagesService;
+import cn.szu.urbantravelplanningagent.service.ConversationSummaryService;
 import jakarta.annotation.Resource;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +10,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.rag.Query;
-import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
+import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
+import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -24,6 +26,8 @@ public abstract class BaseAgent {
 
     @Resource
     private ChatMessagesService chatMessagesService;
+    @Resource
+    private ConversationSummaryService conversationSummaryService;
 
     // 模型名称
     public String name;
@@ -43,55 +47,6 @@ public abstract class BaseAgent {
     public int currentStep = 1;
     // 模型的响应内容
     public String responseContent;
-
-    /**
-     * 当用户输入消息时，模型的响应
-     * @param userMessage
-     * @return
-     */
-    /*public String run(String userMessage, String chatId) {
-        // 判断模型状态
-        if (this.status != ModelStatus.IDLE) {
-            return "模型当前正在处理其他请求，请稍等...";
-        }
-        // 判断用户消息是否为空
-        if (userMessage == null || userMessage.isEmpty()) {
-            return "用户消息为空，请输入有效消息...";
-        }
-
-        // 初始化运行参数
-        this.status = ModelStatus.RUNNING;
-        this.currentStep = 1;
-
-        // 根据 chatId 获取聊天消息列表
-        this.messageList = chatMessagesService.getChatMessages(chatId, this.chatMessages);
-        // 将用户输入的问题添加到消息列表中
-        messageList.add(new UserMessage(userMessage));
-
-        try {
-            for (int i = 0; i < MAX_STEPS && this.status != ModelStatus.FINISHED; i++) {
-                // 执行推理
-                responseContent = step();
-                log.info("Step {}/{} result: {}", this.currentStep, MAX_STEPS, responseContent);
-                this.currentStep++;
-            }
-            if (this.currentStep == MAX_STEPS) {
-                log.info("Model reached max steps. Please check the model logic.");
-            }
-            if (this.status == ModelStatus.FINISHED) {
-                log.info("Model finished. Please check the model logic.");
-//                messageList.add(new UserMessage("模型已成功生成回复，请查看回复。"));
-            }
-        } catch (Exception e) {
-            log.error("Error occurred: {}", e.getMessage());
-            this.responseContent = "模型在处理请求时发生错误，请稍后重试...";
-        } finally {
-            this.status = ModelStatus.IDLE;
-        }
-
-        this.release();
-        return this.responseContent;
-    }*/
 
     /**
      * 流式输出
@@ -149,12 +104,12 @@ public abstract class BaseAgent {
             // 记录本轮是否成功落库
             boolean successSaved = false;
             try {
-                // 查询重写, 也会调用模型
-                String rewrittenMessage = rewriteUserMessage(userMessage);
-                // 根据 chatId 获取聊天消息列表，包含了最新的用户消息
-                this.messageList = chatMessagesService.getChatMessages(chatId);
+                // 新的一轮已经入库。压缩滑出窗口的旧轮，并把摘要加最近几轮作为模型上下文。
+                this.messageList = conversationSummaryService.compact(chatId);
                 // 历史消息列表的长度
                 int historyMessageLength = this.messageList.size();
+                // 查询重写, 也会调用模型
+                String rewrittenMessage = rewriteUserMessage(chatId, turnId, userMessage);
                 // 将消息列表中最后一个用户消息替换为重写后的用户消息
                 this.messageList.set(this.messageList.size() - 1, new UserMessage(rewrittenMessage));
 
@@ -242,17 +197,23 @@ public abstract class BaseAgent {
 
     /**
      * 对用户输入的消息进行重写
+     * @param chatId 会话 ID
+     * @param turnId 当前轮次，不放进重写历史
      * @param userMessage 用户输入的消息
      * @return 重写后的用户消息
      */
-    public String rewriteUserMessage(String userMessage) {
+    public String rewriteUserMessage(String chatId, String turnId, String userMessage) {
         log.info("Rewriting before user input: {}", userMessage);
-        // 创建重写查询对象
-        RewriteQueryTransformer rewriteQueryTransformer = RewriteQueryTransformer.builder().chatClientBuilder(chatClient.mutate()).build();
+        List<Message> history = conversationSummaryService.recentDialogue(chatId, turnId);
         // 创建查询对象
-        Query query = new Query(userMessage);
+        Query query = Query.builder().text(userMessage).history(history).build();
+        // 创建查询重写器
+        QueryTransformer queryTransformer = CompressionQueryTransformer.builder()
+                .chatClientBuilder(this.chatClient.mutate())
+                .build();
         // 执行查询重写
-        Query transformedQuery = rewriteQueryTransformer.transform(query);
+        Query transformedQuery = queryTransformer.transform(query);
+        // 获取重写后的消息
         String rewrittenMessage = transformedQuery.text();
         log.info("Rewriting after user input: {}", rewrittenMessage);
         // 返回重写后的消息

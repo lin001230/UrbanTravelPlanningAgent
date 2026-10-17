@@ -102,7 +102,7 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
      * @param entity
      * @return
      */
-    private Message toMessage(ChatMessageEntity entity) {
+    Message toMessage(ChatMessageEntity entity) {
         String content = StrUtil.nullToEmpty(entity.getContent());
         return switch (StrUtil.nullToEmpty(entity.getRole())) {
             case "user" -> new UserMessage(content);

@@ -63,4 +63,7 @@ public interface ChatSessionMapper {
 
     @Update("update chat_session set updated_at = #{now}, last_active_at = #{now} where id = #{chatId}")
     void touchActivity(@Param("chatId") String chatId, @Param("now") LocalDateTime now);
+
+    @Update("update chat_session set summary = #{summary}, summarized_turn_count = #{summarizedTurnCount}, updated_at = #{updatedAt} where id = #{id}")
+    int updateSummary(ChatSessionEntity chatSession);
 }

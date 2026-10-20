@@ -9,3 +9,7 @@ logs
 .env
 .env.*
 src/main/resources/application-local.yml
+# Local tests are not part of the cloud source.
+src/test/
+# Raw knowledge files and the vector dump are imported into MySQL, not copied into the image.
+knowledge/

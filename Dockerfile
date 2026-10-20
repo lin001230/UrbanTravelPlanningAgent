@@ -5,9 +5,8 @@ COPY .mvn/cloud-settings.xml ./.mvn/cloud-settings.xml
 COPY pom.xml ./
 RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml dependency:go-offline
 COPY src ./src
-# Run offline service/controller tests; the full context test needs MySQL, API keys and MCP.
-RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml \
-    -Dtest=ChatMessagesServiceImplTests,ChatControllerTests package
+# Tests stay on the developer machine. Knowledge vectors are imported into MySQL, not packaged here.
+RUN mvn -B -ntp -U -s .mvn/cloud-settings.xml -DskipTests package
 
 # Install the MCP server at build time to avoid downloads during startup.
 FROM node:22-bookworm-slim AS mcp

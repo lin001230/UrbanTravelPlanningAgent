@@ -38,3 +38,11 @@ build/
 .env
 .env.*
 !.env.example
+
+### Knowledge base raw data and generated vectors ###
+knowledge/source/
+knowledge/output/*
+!knowledge/output/.gitkeep
+
+### Tests stay local ###
+src/test/

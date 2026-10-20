@@ -17,6 +17,11 @@ spring:
         options:
           model: qwen3.7-flash
           multi-model: true
+      # 向量化不用聊天模型。和 KnowledgeEmbedCommand 保持 text-embedding-v4、1024 维。
+      embedding:
+        options:
+          model: text-embedding-v4
+          dimensions: 1024
     mcp:
       client:
         stdio:

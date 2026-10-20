@@ -60,7 +60,7 @@ docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 启动后访问 `http://localhost:8888/api/health`，应返回纯文本 `ok`。这个地址不访问数据库，也不要求登录，可作为云托管 HTTP 健康检查路径；检查端口仍是 **8888**。接口文档在 `http://localhost:8888/api/swagger-ui.html`。
 应用需能访问百炼、高德和 SearchApi.io；对话请求会调用外部服务。
 
-构建时运行 `ChatMessagesServiceImplTests`、`ChatControllerTests`，验证持久化转换逻辑和新的会话接口；跳过依赖真实数据库、API 和 MCP 的 Spring 上下文测试。
+构建时只打包应用，不运行测试。`src/test` 和 `knowledge/` 不会进入镜像。知识库先在云端 MySQL 中执行 `knowledge/output/knowledge_chunk.sql`，服务通过 `MYSQL_*` 环境变量读取 `knowledge_chunk`。
 Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `node` 运行，无需临时下载 npm 包。
 
 ## 会话接口验证
@@ -126,9 +126,9 @@ Dockerfile 在解析 `pom.xml` 前复制 `.mvn/cloud-settings.xml`，两个 Mave
 
 ```powershell
 mvn -B -ntp -U -s .mvn/cloud-settings.xml dependency:go-offline
-mvn -B -ntp -U -s .mvn/cloud-settings.xml '-Dtest=ChatMessagesServiceImplTests,ChatControllerTests' package
+mvn -B -ntp -U -s .mvn/cloud-settings.xml -DskipTests package
 ```
 
-测试范围与 Dockerfile 一致：编译全部测试代码，运行无需外部服务的两组回归测试，不执行 Spring 上下文测试。
+打包方式和 Dockerfile 一致：不编译、不运行 `src/test`。
 
 如果更换镜像后云端仍出现 TLS 错误，需要检查云构建环境到该仓库的出口网络、代理或 CA 信任链。公司代理替换 TLS 证书时应按平台要求安装可信 CA；不要关闭证书校验或改用明文 HTTP。更换镜像是针对仓库访问路径的修复，最终结果仍需由云端重新构建确认。

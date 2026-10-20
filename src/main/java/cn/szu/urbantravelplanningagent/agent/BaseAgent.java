@@ -1,6 +1,7 @@
 package cn.szu.urbantravelplanningagent.agent;
 
 import cn.szu.urbantravelplanningagent.constant.ModelStatus;
+import cn.szu.urbantravelplanningagent.knowledge.KnowledgeRetriever;
 import cn.szu.urbantravelplanningagent.service.ChatMessagesService;
 import cn.szu.urbantravelplanningagent.service.ConversationSummaryService;
 import jakarta.annotation.Resource;
@@ -8,6 +9,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
@@ -28,6 +30,8 @@ public abstract class BaseAgent {
     private ChatMessagesService chatMessagesService;
     @Resource
     private ConversationSummaryService conversationSummaryService;
+    @Resource
+    private KnowledgeRetriever knowledgeRetriever;
 
     // 模型名称
     public String name;
@@ -47,6 +51,8 @@ public abstract class BaseAgent {
     public int currentStep = 1;
     // 模型的响应内容
     public String responseContent;
+    // 知识库检索结果
+    public SystemMessage knowledgeRetrievalResults;
 
     /**
      * 流式输出
@@ -112,6 +118,18 @@ public abstract class BaseAgent {
                 String rewrittenMessage = rewriteUserMessage(chatId, turnId, userMessage);
                 // 将消息列表中最后一个用户消息替换为重写后的用户消息
                 this.messageList.set(this.messageList.size() - 1, new UserMessage(rewrittenMessage));
+                // 获取知识库检索结果
+                List<String> knowledgeResults = this.knowledgeRetriever.retrieve(rewrittenMessage);
+                if (knowledgeResults != null && !knowledgeResults.isEmpty()) {
+                    // 只有检索到知识的时候，才生成知识提示词
+                    String knowledgeStr = "以下是地铁知识库检索到的资料，回答时可以引用：";
+                    int index = 1;
+                    for (String result : knowledgeResults) {
+                        knowledgeStr += "\n" + index + ". " + result;
+                        index++;
+                    }
+                    this.knowledgeRetrievalResults = new SystemMessage(knowledgeStr);
+                }
 
                 if (closed.get()) {
                     return;
@@ -173,6 +191,7 @@ public abstract class BaseAgent {
                     // 等后台调用退出后再释放资源，避免断连回调与模型执行冲突。
                     this.release();
                 } finally {
+                    this.knowledgeRetrievalResults = null;
                     this.status = ModelStatus.IDLE;
                     emitter.complete();
                 }

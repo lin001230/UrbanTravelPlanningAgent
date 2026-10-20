@@ -6,10 +6,7 @@ import cn.szu.urbantravelplanningagent.constant.ModelStatus;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -55,8 +52,15 @@ public class ToolCallingAgent extends ReActAgent {
     @Override
     public boolean think() {
         try {
+            // 获取消息列表
             List<Message> promptMessages = new ArrayList<>(getMessageList());
+            if (this.knowledgeRetrievalResults != null) {
+                // 加入知识库检索结果，并作为第一个消息
+                promptMessages.addFirst(this.knowledgeRetrievalResults);
+            }
+            // 添加下一阶段提示
             promptMessages.add(new AssistantMessage(this.nextStepPrompt));
+            // 构建 Prompt
             Prompt prompt = Prompt.builder().chatOptions(chatOptions).messages(promptMessages).build();
             ChatResponse chatResponse = chatClient
                     .prompt(prompt)

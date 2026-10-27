@@ -1,9 +1,16 @@
 spring:
   datasource:
     # MySQL is external to this container; use an address reachable from cloud hosting.
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:urban_travel_planning_agent}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&connectTimeout=10000&socketTimeout=30000
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:urban_travel_planning_agent}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&connectTimeout=10000&socketTimeout=30000&tcpKeepAlive=true
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
+    hikari:
+      # 云端 MySQL 会先关掉空闲连接。存活时间必须短于服务端 wait_timeout，默认 30 分钟会拿到已关闭的连接。
+      max-lifetime: 50000
+      keepalive-time: 30000
+      idle-timeout: 30000
+      minimum-idle: 1
+      maximum-pool-size: 5
   sql:
     init:
       # Initialize the database with schema.sql manually, not on each startup.

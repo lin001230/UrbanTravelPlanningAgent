@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
-import { Eye, EyeOff, Leaf, LockKeyhole, ShieldCheck, TrainFront, UserRound, X } from 'lucide-vue-next'
+import { ArrowRight, ChevronRight, Eye, EyeOff, Leaf, LockKeyhole, ShieldCheck, TrainFront, UserRound, X } from 'lucide-vue-next'
 import { getAuthError, loginAccount, registerAccount } from '../api/auth'
 
 defineProps({
@@ -107,36 +107,70 @@ onMounted(() => usernameInput.value?.focus())
 
 <template>
   <div class="auth-page">
+    <div class="auth-shell">
     <button v-if="!required" type="button" class="auth-close" @click="emit('close')">
       <X :size="16" />返回助手
     </button>
-    <section class="auth-hero">
+    <div class="auth-left">
       <a class="brand" href="#" @click.prevent="!required && emit('close')">
-        <span class="brand-mark"><TrainFront :size="24" :stroke-width="1.8" /></span>
+        <span class="brand-mark"><TrainFront :size="22" :stroke-width="1.8" /></span>
         <span class="brand-name">路小行<span>RoutePilot</span></span>
       </a>
+      <p class="auth-tagline">用智能路线，<br>发现更大的世界</p>
       <div class="auth-hero-copy">
         <div class="eyebrow">YOUR EVERYDAY METRO COMPANION</div>
         <h1>登录后，<span>路线跟着你。</span></h1>
-        <p>注册一个账号，地铁出行记录就保存在你名下。换一台设备，也能接着上次的对话。</p>
-      </div>
-      <div class="auth-illustration" aria-hidden="true">
-        <svg viewBox="0 0 520 88" fill="none">
-          <path d="M16 58H128Q146 58 160 44L172 32Q184 20 202 20H330Q348 20 360 33L370 43Q382 56 400 56H504" stroke="#e6ede9" stroke-width="6" stroke-linecap="round" />
-          <path d="M48 58H128Q146 58 160 44L172 32Q184 20 202 20H330Q348 20 360 33L370 43Q382 56 400 56H468" stroke="#8fc5ae" stroke-width="3" stroke-linecap="round" />
-          <circle cx="86" cy="58" r="6" fill="white" stroke="#58a387" stroke-width="3" />
-          <circle cx="248" cy="20" r="6" fill="white" stroke="#58a387" stroke-width="3" />
-          <circle cx="430" cy="56" r="6" fill="white" stroke="#58a387" stroke-width="3" />
-          <text x="86" y="80" text-anchor="middle">你的账号</text>
-          <text x="248" y="44" text-anchor="middle">出行记录</text>
-          <text x="430" y="80" text-anchor="middle">下一站</text>
-        </svg>
+        <p>注册一个账号，地铁出行记录就保存在你名下。<br>换一台设备，也能接着上次的对话。</p>
+        <div class="auth-route" aria-hidden="true">
+          <span class="auth-route-line"></span>
+          <div class="auth-stop"><i></i><span>你的账号</span></div>
+          <div class="auth-stop is-current"><i></i><span>出行记录</span></div>
+          <div class="auth-stop"><i></i><span>下一站</span></div>
+        </div>
       </div>
       <ul class="auth-points">
-        <li><ShieldCheck :size="16" />会话只属于当前登录的你</li>
-        <li><Leaf :size="16" />账号和密码即可，无需手机验证码</li>
+        <li><span class="auth-point-icon"><ShieldCheck :size="15" /></span>会话只属于当前登录的你</li>
+        <li><span class="auth-point-icon"><Leaf :size="15" /></span>账号和密码即可，无需手机验证码</li>
       </ul>
-    </section>
+    </div>
+    <header class="auth-scene">
+      <svg class="auth-scene-art" viewBox="0 0 640 420" aria-hidden="true">
+        <circle cx="210" cy="72" r="58" fill="#f4f6e0" opacity=".9" />
+        <path d="M80 176c80-42 168-48 250-8 62 30 118 22 230-18v270H40z" fill="#d9eee6" />
+        <path d="M40 236c90-70 170-46 248 8 58 40 118 18 180-28 48-36 110-18 172 28v176H40z" fill="#b9dccb" />
+        <g fill="#c5d8cc">
+          <rect x="318" y="148" width="8" height="48" rx="2" />
+          <rect x="330" y="128" width="7" height="68" rx="2" />
+          <rect x="341" y="156" width="12" height="40" rx="2" />
+          <rect x="356" y="136" width="7" height="60" rx="2" />
+          <rect x="366" y="162" width="10" height="34" rx="2" />
+        </g>
+        <path d="M0 292c92-78 176-38 248 16 52 40 108 18 176-32 62-46 132-22 216 42v102H0z" fill="#8fbfa3" />
+        <path d="M390 96c42 50 18 90-22 124-36 30-18 72 26 108 38 32 70 42 90 86" stroke="#f7f5ef" stroke-width="28" fill="none" stroke-linecap="round" />
+        <path d="M390 96c42 50 18 90-22 124-36 30-18 72 26 108 38 32 70 42 90 86" stroke="#e4e2d8" stroke-width="18" fill="none" stroke-linecap="round" />
+        <path d="M386 122c28 36 12 64-16 88" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-dasharray="6 8" />
+        <g transform="translate(418 214) rotate(24)">
+          <rect width="42" height="16" rx="4" y="7" fill="#f7f9fb" />
+          <path d="M8 7 14 0h16l6 7" fill="#e6eef4" />
+          <circle cx="11" cy="24" r="3.6" fill="#66747c" />
+          <circle cx="30" cy="24" r="3.6" fill="#66747c" />
+        </g>
+        <g fill="#3c8b66">
+          <circle cx="96" cy="318" r="22" />
+          <circle cx="132" cy="336" r="16" />
+          <circle cx="178" cy="308" r="18" />
+          <circle cx="236" cy="332" r="20" />
+        </g>
+        <g fill="#6d5140">
+          <rect x="93" y="332" width="6" height="18" rx="2" />
+          <rect x="175" y="322" width="6" height="16" rx="2" />
+        </g>
+        <g transform="translate(452 118)">
+          <path d="M18 2a14 14 0 0 0-14 14c0 11 14 24 14 24s14-13 14-24A14 14 0 0 0 18 2z" fill="#2f8f6b" />
+          <circle cx="18" cy="16" r="5.2" fill="#fff" />
+        </g>
+      </svg>
+    </header>
 
     <section class="auth-panel">
       <div class="auth-card">
@@ -202,7 +236,7 @@ onMounted(() => usernameInput.value?.focus())
                 <Eye v-else :size="16" />
               </button>
             </span>
-            <small id="auth-password-error" :class="{ 'is-error': errors.password }">{{ errors.password || '请设置 8–64 位密码。' }}</small>
+            <small id="auth-password-error" :class="{ 'is-error': errors.password }">{{ errors.password || '请输入 8-64 位密码。' }}</small>
           </label>
 
           <label v-if="isRegister" class="auth-field">
@@ -228,15 +262,23 @@ onMounted(() => usernameInput.value?.focus())
 
           <button type="submit" class="auth-submit" :disabled="submitting">
             <span v-if="submitting" class="send-spinner"></span>
-            {{ submitLabel }}
+            <span>{{ submitLabel }}</span>
+            <ArrowRight v-if="!submitting" :size="16" />
           </button>
         </form>
 
         <p class="auth-swap">
-          <template v-if="isRegister">已经有账号了？<button type="button" @click="switchMode('login')">去登录</button></template>
-          <template v-else>还没有账号？<button type="button" @click="switchMode('register')">去注册</button></template>
+          <template v-if="isRegister">已经有账号了？<button type="button" @click="switchMode('login')">去登录 <ChevronRight :size="14" /></button></template>
+          <template v-else>还没有账号？<button type="button" @click="switchMode('register')">去注册 <ChevronRight :size="14" /></button></template>
         </p>
       </div>
     </section>
+    <svg class="auth-foliage" viewBox="0 0 390 72" aria-hidden="true">
+      <path d="M0 46c28-18 48-8 70 6 18 12 36 8 54-8 20-18 42-12 60 4 16 14 34 10 52-6 22-20 40-14 58 6 14 16 30 12 46-4v28H0z" fill="#d7efe4" />
+      <path d="M250 40c16-14 34-8 48 6 12 12 28 8 42-4 16-14 32-8 50 8v22H240z" fill="#c5e6d6" />
+      <ellipse cx="28" cy="58" rx="16" ry="8" fill="#b7ddc8" transform="rotate(-18 28 58)" />
+      <ellipse cx="360" cy="54" rx="18" ry="8" fill="#b7ddc8" transform="rotate(16 360 54)" />
+    </svg>
+    </div>
   </div>
 </template>

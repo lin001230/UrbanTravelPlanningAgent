@@ -27,6 +27,6 @@ spring:
                 AMAP_MAPS_API_KEY: ${AMAP_MAPS_API_KEY}
 
 
-# SearchApi.io 联网搜索：注册 https://www.searchapi.io/ 后在控制台获取 API Key 并替换
-search-api:
-  api-key: ${SEARCH_API_KEY}
+# DeepSeek 网页搜索：https://api.deepseek.com/v1/tools/search
+deepseek-search-api:
+  api-key: ${DEEPSEEK_SEARCH_API_KEY}

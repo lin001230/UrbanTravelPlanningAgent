@@ -40,8 +40,8 @@ spring:
               env:
                 AMAP_MAPS_API_KEY: ${AMAP_MAPS_API_KEY}
 
-search-api:
-  api-key: ${SEARCH_API_KEY}
+deepseek-search-api:
+  api-key: ${DEEPSEEK_SEARCH_API_KEY}
 
 app:
   jwt:

@@ -24,7 +24,7 @@
 | `DASHSCOPE_API_KEY` | 百炼对话和向量化 |
 | `DASHSCOPE_BASE_URL` | DashScope 服务地址 |
 | `AMAP_MAPS_API_KEY` | 高德地图 |
-| `SEARCH_API_KEY` | SearchApi.io 联网搜索 |
+| `DEEPSEEK_SEARCH_API_KEY` | DeepSeek 网页搜索 |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` | 数据库地址，本地默认库名 `urban_travel_planning_agent` |
 | `MYSQL_USERNAME` / `MYSQL_PASSWORD` | 数据库账号 |
 | `JWT_SECRET` | 登录令牌签名，正式环境换成足够长的随机字符串 |

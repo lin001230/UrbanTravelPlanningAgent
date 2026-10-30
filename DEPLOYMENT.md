@@ -16,7 +16,7 @@
 | `DASHSCOPE_API_KEY` | 百炼 API Key |
 | `DASHSCOPE_BASE_URL` | 与本地运行时相同的 DashScope Agent 服务地址 |
 | `AMAP_MAPS_API_KEY` | 高德地图 API Key |
-| `SEARCH_API_KEY` | SearchApi.io API Key |
+| `DEEPSEEK_SEARCH_API_KEY` | DeepSeek 网页搜索 API Key |
 | `MYSQL_HOST` | 后端容器能够访问的 MySQL 主机地址，不包含协议和端口，不能使用 `localhost` |
 | `MYSQL_PORT` | MySQL 端口，默认 `3306` |
 | `MYSQL_DATABASE` | 已创建的数据库名称，默认 `urban_travel_planning_agent` |
@@ -58,7 +58,7 @@ docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 在 Docker Desktop 中连接电脑上运行的 MySQL 时，可以使用 `MYSQL_HOST=host.docker.internal`；云端应替换为实际可达的数据库地址。
 `.env` 由 `docker run --env-file` 注入；直接使用 Maven 或 IDE 启动时，仍需在进程环境变量中配置相应的值。
 启动后访问 `http://localhost:8888/api/health`，应返回纯文本 `ok`。这个地址不访问数据库，也不要求登录，可作为云托管 HTTP 健康检查路径；检查端口仍是 **8888**。接口文档在 `http://localhost:8888/api/swagger-ui.html`。
-应用需能访问百炼、高德和 SearchApi.io；对话请求会调用外部服务。
+应用需能访问百炼、高德和 DeepSeek；对话请求会调用外部服务。
 
 构建时只打包应用，不运行测试。`src/test` 和 `knowledge/` 不会进入镜像。知识库先在云端 MySQL 中执行 `knowledge/output/knowledge_chunk.sql`，服务通过 `MYSQL_*` 环境变量读取 `knowledge_chunk`。
 Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `node` 运行，无需临时下载 npm 包。

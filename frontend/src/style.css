@@ -216,7 +216,10 @@ h1 > span { color: #318568; }
 .error-message { background: #fff9f2; border: 1px solid #f0e4d3; border-radius: 10px; padding: 12px 15px; font-size: 13px; color: #977b57; }
 .error-message p { margin: 0; line-height: 1.8; }
 .retry-button { color: #9b7845; margin-top: 7px; }
-.thinking { display: flex; align-items: center; gap: 11px; color: #768f7d; font-size: 13px; margin-top: 18px; }
+.thinking { display: flex; align-items: center; flex-wrap: wrap; gap: 11px; width: 100%; color: #768f7d; font-size: 13px; margin-top: 18px; }
+.elapsed-live { margin-left: auto; color: #5d8f74; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inference-time { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; color: #8ea095; font-size: 12px; font-variant-numeric: tabular-nums; }
+.inference-time + .copy-button { margin-top: 6px; }
 .thinking-dots { display: flex; gap: 4px; }
 .thinking-dots i { width: 5px; height: 5px; background: #79a58b; border-radius: 50%; animation: pulse 1.3s infinite; }
 .thinking-dots i:nth-child(2) { animation-delay: .15s; }

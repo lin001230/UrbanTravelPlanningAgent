@@ -3,6 +3,7 @@ package cn.szu.urbantravelplanningagent.agent;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.szu.urbantravelplanningagent.constant.ModelStatus;
+import cn.szu.urbantravelplanningagent.tool.TerminateTool;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +27,7 @@ public class ToolCallingAgent extends ReActAgent {
     private ToolCallback[] availableTools;
 
     // 工具调用的 ChatResponse
-    private ChatResponse toolCallChatResponse;
+//    private ChatResponse toolCallChatResponse;
 
     // 工具调用管理器
     private final ToolCallingManager toolCallingManager;
@@ -50,13 +51,13 @@ public class ToolCallingAgent extends ReActAgent {
      * @return
      */
     @Override
-    public boolean think() {
+    public boolean think(AgentTurn agentTurn) {
         try {
             // 获取消息列表
-            List<Message> promptMessages = new ArrayList<>(getMessageList());
-            if (this.knowledgeRetrievalResults != null) {
+            List<Message> promptMessages = new ArrayList<>(agentTurn.getMessageList());
+            if (agentTurn.getKnowledgeRetrievalResults() != null) {
                 // 加入知识库检索结果，并作为第一个消息
-                promptMessages.addFirst(this.knowledgeRetrievalResults);
+                promptMessages.addFirst(agentTurn.getKnowledgeRetrievalResults());
             }
             // 添加下一阶段提示
             promptMessages.add(new AssistantMessage(this.nextStepPrompt));
@@ -69,7 +70,7 @@ public class ToolCallingAgent extends ReActAgent {
                     .call()
                     .chatResponse();
             // 保存下来推理结果
-            this.toolCallChatResponse = chatResponse;
+            agentTurn.setToolCallChatResponse(chatResponse);
             if (chatResponse == null) { // 如果 chatResponse 为null，抛出异常
                 log.warn("ChatResponse is null");
                 throw new RuntimeException("ChatResponse is null");
@@ -87,10 +88,10 @@ public class ToolCallingAgent extends ReActAgent {
             assistantText = assistantText == null ? "" : assistantText;
             if (!assistantMessage.hasToolCalls()) {
                 // 不需要调用工具时，将推理结果加入消息列表
-                getMessageList().add(new AssistantMessage(assistantText));
+                agentTurn.getMessageList().add(new AssistantMessage(assistantText));
             }
             // 设置推理结果
-            this.setThinkResult(assistantMessage.getText());
+            agentTurn.setThinkResult(assistantText);
             return assistantMessage.hasToolCalls();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -102,28 +103,29 @@ public class ToolCallingAgent extends ReActAgent {
      * @return
      */
     @Override
-    public String act() {
-        if (!toolCallChatResponse.hasToolCalls()) {
+    public String act(AgentTurn agentTurn) {
+        if (!agentTurn.getToolCallChatResponse().hasToolCalls()) {
             return "不需要进行工具调用";
         }
 
         try {
-            Prompt prompt = Prompt.builder().messages(getMessageList()).chatOptions(chatOptions).build();
+            Prompt prompt = Prompt.builder().messages(agentTurn.getMessageList()).chatOptions(chatOptions).build();
             // 执行工具调用
-            ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
+            ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, agentTurn.getToolCallChatResponse());
             // 将工具调用结果加入消息列表
-            setMessageList(toolExecutionResult.conversationHistory());
+            agentTurn.setMessageList(toolExecutionResult.conversationHistory());
             ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
-            String toolResponse = toolResponseMessage.getResponses().stream().map(response ->
-                            "工具" + response.name() + "的调用结果：" + response.responseData())
+            String toolResponse = toolResponseMessage.getResponses().stream()
+                    .filter(response -> !TerminateTool.NAME.equals(response.name()))
+                    .map(response -> "工具" + response.name() + "的调用结果：" + response.responseData())
                     .collect(Collectors.joining("\n"));
             log.info("工具调用结果: {}", toolResponse);
 
             boolean isTerminal = toolResponseMessage.getResponses().stream().anyMatch(response ->
-                    "doTerminate".equals(response.name()));
+                    TerminateTool.NAME.equals(response.name()));
             if (isTerminal) {
                 // 修改模型状态
-                setStatus(ModelStatus.FINISHED);
+                agentTurn.setStatus(ModelStatus.FINISHED);
             }
             return toolResponse;
         } catch (Exception e) {

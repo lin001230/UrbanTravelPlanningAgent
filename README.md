@@ -9,7 +9,7 @@
 | 后端 | Java 21、Spring Boot 3.5、MyBatis | 端口 `8888`，接口前缀 `/api` |
 | 前端 | Vue 3、Vite | 开发地址 `http://localhost:5173`，把 `/api` 代理到后端 |
 | 数据库 | MySQL 5.7.8+ / 8.x | 用户、会话、消息，以及知识库向量 |
-| 模型 | 通义千问 `qwen3.7-flash` | 嵌入模型是 `text-embedding-v4`，1024 维 |
+| 模型 | 通义千问 `qwen3.8-flash` | 嵌入模型是 `text-embedding-v4`，1024 维 |
 
 聊天模型负责规划和工具调用。知识库嵌入使用另一个模型，两边必须保持 `text-embedding-v4` 和 1024 维，否则相似度无法比较。
 

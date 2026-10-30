@@ -28,7 +28,7 @@ import java.util.Set;
 /**
  * 离线把去重后的地铁知识嵌入成向量，写入 knowledge/output/embeddings.jsonl。
  * <p>
- * 使用通义 text-embedding-v4、1024 维。这和聊天模型 qwen3.7-flash 不是同一个模型。
+ * 使用通义 text-embedding-v4、1024 维。这和聊天模型 qwen3.8-flash 不是同一个模型。
  * 启动本类不会启动 Web 服务。在 IDEA 里直接运行 main，工作目录选项目根目录，
  * 并设置环境变量 DASHSCOPE_API_KEY。可选参数：--dry-run、--limit 5。
  */

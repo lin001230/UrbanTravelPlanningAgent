@@ -58,8 +58,8 @@ public interface ChatSessionMapper {
      * @param chatId
      * @param title
      */
-    @Update("update chat_session set title = #{title} where id = #{chatId} and status = 1")
-    int updateChatTitleById(@Param("chatId") String chatId, @Param("title") String title);
+    @Update("update chat_session set title = #{title} where id = #{chatId} and user_id = #{userId} and status = 1")
+    int updateChatTitleById(@Param("chatId") String chatId, @Param("title") String title, @Param("userId") Long userId);
 
     @Update("update chat_session set updated_at = #{now}, last_active_at = #{now} where id = #{chatId}")
     void touchActivity(@Param("chatId") String chatId, @Param("now") LocalDateTime now);

@@ -52,6 +52,8 @@ const renameError = ref('')
 let toastTimer
 let copyTimer
 let streamController
+let elapsedTimer
+const now = ref(Date.now())
 let stopAuthWatch
 let listVersion = 0
 let navigationVersion = 0
@@ -66,6 +68,32 @@ const isCurrentPending = computed(() => pending.value && pendingConversationId.v
 const canSend = computed(() => input.value.trim().length > 0 && !pending.value
   && !listLoading.value && !listError.value && !activeConversation.value?.loading
   && !activeConversation.value?.loadError && !deletingIds.has(activeId.value))
+
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  if (minutes === 0) return `${seconds} 秒`
+  return `${minutes} 分 ${String(seconds).padStart(2, '0')} 秒`
+}
+
+// 同一次请求的开始和结束都用浏览器时间，实时数字和结果底部的耗时才是同一段。
+function elapsedLabel(message) {
+  if (!message.startedAt) return ''
+  const end = message.finishedAt || (message.status === 'streaming' ? now.value : message.startedAt)
+  return formatElapsed(end - message.startedAt)
+}
+
+function startElapsedClock() {
+  now.value = Date.now()
+  clearInterval(elapsedTimer)
+  elapsedTimer = setInterval(() => { now.value = Date.now() }, 1000)
+}
+
+function stopElapsedClock() {
+  clearInterval(elapsedTimer)
+  elapsedTimer = undefined
+}
 
 async function loadConversations(selectFirst = false) {
   const version = ++listVersion
@@ -306,10 +334,12 @@ async function requestReply(conversation, request, failedMessage) {
   const reply = reactive({
     id: crypto.randomUUID(), role: 'assistant', content: '', steps: [],
     status: 'streaming', request, error: false, errorText: '',
+    startedAt: Date.now(), finishedAt: null,
   })
   conversation.messages.push(reply)
   const controller = new AbortController()
   streamController = controller
+  startElapsedClock()
   scrollToBottom(true)
   try {
     await sendChatStream(request, {
@@ -319,6 +349,7 @@ async function requestReply(conversation, request, failedMessage) {
         if (event.type === 'final') {
           reply.content = event.content
           reply.status = 'done'
+          reply.finishedAt = Date.now()
         } else {
           reply.steps.push({ number: event.number ?? reply.steps.length + 1, content: event.content })
         }
@@ -333,6 +364,8 @@ async function requestReply(conversation, request, failedMessage) {
     reply.error = true
     reply.errorText = getChatError(error)
   } finally {
+    if (!reply.finishedAt) reply.finishedAt = Date.now()
+    stopElapsedClock()
     streamController = null
     pending.value = false
     pendingConversationId.value = null
@@ -372,6 +405,7 @@ async function copyMessage(message) {
 onBeforeUnmount(() => {
   stopAuthWatch?.()
   streamController?.abort(new Error('页面已关闭，流式接收已停止。'))
+  stopElapsedClock()
   clearTimeout(copyTimer)
   clearTimeout(toastTimer)
 })
@@ -461,9 +495,9 @@ onBeforeUnmount(() => {
                   <summary><Route :size="14" />规划过程 · {{ message.steps.length }} 步<span>{{ message.status === 'streaming' ? '进行中' : message.error ? '已中断' : '已完成' }}</span></summary>
                   <div v-for="(step, index) in message.steps" :key="index" class="planning-step"><div class="step-label">第 {{ step.number }} 步</div><MessageContent :content="step.content || '本步未返回文字内容。'" /></div>
                 </details>
-                <div v-if="message.status === 'streaming'" class="stream-progress"><div class="thinking" role="status"><span class="thinking-dots"><i></i><i></i><i></i></span>{{ message.steps.length ? '正在继续规划路线…' : '正在为你规划路线…' }}</div><p class="thinking-caption">{{ message.steps.length ? '每完成一步，结果会实时显示在上方' : '正在等待第一步结果，规划可能需要一点时间' }}</p></div>
+                <div v-if="message.status === 'streaming'" class="stream-progress"><div class="thinking" role="status"><span class="thinking-dots"><i></i><i></i><i></i></span>{{ message.steps.length ? '正在继续规划路线…' : '正在为你规划路线…' }}<span class="elapsed-live">已用时 {{ elapsedLabel(message) }}</span></div><p class="thinking-caption">{{ message.steps.length ? '每完成一步，结果会实时显示在上方' : '正在等待第一步结果，规划可能需要一点时间' }}</p></div>
                 <div v-if="message.error" class="error-message"><p>{{ message.errorText || message.content }}</p><button class="retry-button" :disabled="pending" @click="retry(message)"><RefreshCw :size="14" />重新尝试</button></div>
-                <template v-else-if="message.content"><div v-if="message.steps?.length" class="final-result-label"><Check :size="15" />最终结果</div><MessageContent :content="message.content" /></template>
+                <template v-else-if="message.content"><div v-if="message.steps?.length" class="final-result-label"><Check :size="15" />最终结果</div><MessageContent :content="message.content" /><p v-if="message.startedAt" class="inference-time"><Clock3 :size="13" />推理用时 {{ elapsedLabel(message) }}</p></template>
                 <button v-if="message.content && !message.error" class="copy-button" @click="copyMessage(message)"><Check v-if="copiedId === message.id" :size="14" /><Copy v-else :size="14" />{{ copiedId === message.id ? '已复制' : '复制' }}</button>
               </div>
             </template>

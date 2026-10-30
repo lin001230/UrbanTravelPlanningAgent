@@ -11,6 +11,7 @@ import cn.szu.urbantravelplanningagent.entity.ChatSessionEntity;
 import cn.szu.urbantravelplanningagent.mapper.ChatMessageMapper;
 import cn.szu.urbantravelplanningagent.mapper.ChatSessionMapper;
 import cn.szu.urbantravelplanningagent.service.ChatMessagesService;
+import cn.szu.urbantravelplanningagent.tool.TerminateTool;
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -78,8 +79,12 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
                     steps.add(new ChatMessageView.Step(steps.size() + 1, StrUtil.nullToEmpty(message.getText())));
                 } else if (message instanceof ToolResponseMessage tool) {
                     String toolText = tool.getResponses().stream()
+                            .filter(response -> !TerminateTool.NAME.equals(response.name()))
                             .map(response -> "工具" + response.name() + "的调用结果：" + response.responseData())
                             .collect(Collectors.joining("\n"));
+                    if (toolText.isEmpty()) {
+                        continue;
+                    }
                     if (steps.isEmpty()) {
                         steps.add(new ChatMessageView.Step(1, toolText));
                     } else {
@@ -247,7 +252,7 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
         Assert.hasText(title, "标题不能为空");
         String normalizedTitle = title.strip();
         Assert.isTrue(normalizedTitle.codePointCount(0, normalizedTitle.length()) <= 64, "标题不能超过 64 个字符");
-        if (chatSessionMapper.updateChatTitleById(chatId, normalizedTitle) == 0) {
+        if (chatSessionMapper.updateChatTitleById(chatId, normalizedTitle, LoginUserContext.getUserId()) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在或已删除");
         }
     }

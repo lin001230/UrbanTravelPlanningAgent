@@ -46,3 +46,7 @@ knowledge/output/*
 
 ### Tests stay local ###
 src/test/
+frontend/tests/
+frontend/playwright.config.js
+frontend/test-results/
+frontend/playwright-report/

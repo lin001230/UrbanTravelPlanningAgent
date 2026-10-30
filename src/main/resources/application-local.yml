@@ -6,7 +6,7 @@ spring:
         base-url: ${DASHSCOPE_BASE_URL}
       chat:
         options:
-          model: qwen3.7-flash
+          model: qwen3.8-flash
           multi-model: true
       # 向量化不用聊天模型。和 KnowledgeEmbedCommand 保持 text-embedding-v4、1024 维。
       embedding:

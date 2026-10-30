@@ -27,6 +27,14 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
     @Resource
     private ObjectMapper objectMapper;
 
+    /**
+     * 在处理请求之前执行，用于进行权限验证
+     * @param request
+     * @param response
+     * @param handler
+     * @return
+     * @throws Exception
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {

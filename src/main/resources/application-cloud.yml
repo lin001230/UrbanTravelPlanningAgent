@@ -31,14 +31,11 @@ spring:
           dimensions: 1024
     mcp:
       client:
-        stdio:
+        sse:
           connections:
-            amap-mcp-server:
-              command: node
-              args:
-                - /opt/amap/node_modules/@amap/amap-maps-mcp-server/build/index.js
-              env:
-                AMAP_MAPS_API_KEY: ${AMAP_MAPS_API_KEY}
+            tencent-map:
+              url: https://mcp.map.qq.com
+              sse-endpoint: /sse?key=${TENCENT_MAP_API_KEY}
 
 deepseek-search-api:
   api-key: ${DEEPSEEK_SEARCH_API_KEY}

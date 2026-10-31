@@ -16,15 +16,11 @@ spring:
 
     mcp:
       client:
-        stdio:
+        sse:
           connections:
-            amap-mcp-server:
-              command: npx.cmd
-              args:
-                - "-y"
-                - "@amap/amap-maps-mcp-server"
-              env:
-                AMAP_MAPS_API_KEY: ${AMAP_MAPS_API_KEY}
+            tencent-map:
+              url: https://mcp.map.qq.com
+              sse-endpoint: /sse?key=${TENCENT_MAP_API_KEY}
 
 
 # DeepSeek 网页搜索：https://api.deepseek.com/v1/tools/search

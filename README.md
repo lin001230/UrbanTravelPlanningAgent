@@ -1,6 +1,6 @@
 # 路小行 · RoutePilot
 
-深圳地铁出行规划智能体。用户登录后用自然语言描述行程，服务会压缩早期对话、重写当前问题，再检索地铁知识库，并调用高德查询实时路线。
+深圳地铁出行规划智能体。用户登录后用自然语言描述行程，服务会压缩早期对话、重写当前问题，再检索地铁知识库，并调用腾讯位置服务解析地点和查询实时路线。
 
 ## 组成
 
@@ -15,7 +15,7 @@
 
 ## 本地启动
 
-需要 JDK 21、Maven、Node.js 20.19+ 或 22.12+，以及一个可连接的 MySQL。
+后端需要 JDK 21、Maven，以及一个可连接的 MySQL。前端需要 Node.js 20.19+ 或 22.12+。
 
 把根目录 [`.env.example`](.env.example) 里的变量配到当前进程，不要把真实密钥提交进仓库：
 
@@ -23,7 +23,7 @@
 | --- | --- |
 | `DASHSCOPE_API_KEY` | 百炼对话和向量化 |
 | `DASHSCOPE_BASE_URL` | DashScope 服务地址 |
-| `AMAP_MAPS_API_KEY` | 高德地图 |
+| `TENCENT_MAP_API_KEY` | 腾讯位置服务 WebService Key，用于地址解析和公交地铁规划 |
 | `DEEPSEEK_SEARCH_API_KEY` | DeepSeek 网页搜索 |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` | 数据库地址，本地默认库名 `urban_travel_planning_agent` |
 | `MYSQL_USERNAME` / `MYSQL_PASSWORD` | 数据库账号 |
@@ -53,7 +53,7 @@ npm run dev
 
 ## 知识库
 
-稳定资料放在知识库里：站点介绍、出入口换乘、相邻站、首末班车。实时路线仍由高德查询，不写入向量。
+稳定资料放在知识库里：站点介绍、出入口换乘、相邻站、首末班车。实时路线由腾讯位置服务查询，不写入向量。
 
 原始表和生成结果不进入 Git。把四张源表放到 `knowledge/source/` 后：
 

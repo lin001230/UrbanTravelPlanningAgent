@@ -10,11 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -36,24 +34,14 @@ public abstract class BaseAgent {
 
     // 模型名称
     public String name;
-    // 模型状态，默认为空闲
-//    public volatile ModelStatus status = ModelStatus.IDLE;
     // 系统提示词
     public String systemPrompt;
     // 下一步提示词
     public String nextStepPrompt;
     // 聊天客户端
     public ChatClient chatClient;
-    // 当前 chatId 对应的聊天消息列表
-//    public List<Message> messageList;
     // 对于一个问题最大执行步数
     public final int MAX_STEPS = 20;
-    // 当前执行步数
-//    public int currentStep = 1;
-    // 模型的响应内容
-//    public String responseContent;
-    // 知识库检索结果
-//    public SystemMessage knowledgeRetrievalResults;
 
     /**
      * 流式输出
@@ -111,9 +99,8 @@ public abstract class BaseAgent {
                 // 历史消息列表的长度
                 int historyMessageLength = agentTurn.getMessageList().size();
                 // 查询重写, 也会调用模型
+                // 重写后的用户消息只用于知识库检索
                 String rewrittenMessage = rewriteUserMessage(chatId, turnId, userMessage);
-                // 将消息列表中最后一个用户消息替换为重写后的用户消息
-                agentTurn.getMessageList().set(agentTurn.getMessageList().size() - 1, new UserMessage(rewrittenMessage));
                 // 获取知识库检索结果
                 List<String> knowledgeResults = this.knowledgeRetriever.retrieve(rewrittenMessage);
                 if (knowledgeResults != null && !knowledgeResults.isEmpty()) {

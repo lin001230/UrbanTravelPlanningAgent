@@ -3,7 +3,7 @@
 在微信云托管中选择源码构建，构建目录设为项目根目录，Dockerfile 路径为 `Dockerfile`，服务监听端口设为 **8888**。
 端口必须与容器内 Spring Boot 的监听端口一致，参见[官方 Java 部署说明](https://cloud.tencent.com/document/product/1243/49239)。
 
-镜像分阶段构建 Maven 项目，运行环境包含 Java 21、Node.js 22 和高德 MCP 服务。
+镜像分阶段构建 Maven 项目，运行环境是 Java 21。地点解析和公交地铁规划通过腾讯位置服务的云端 MCP 完成，镜像内不再安装 Node.js 或高德 MCP。
 云端自动启用 `cloud` 配置，接口前缀仍为 `/api`，聊天接口为 `/api/chat/stream`。
 会话和消息保存在外部 MySQL 中，容器重启或重新部署后仍可读取，无需给后端容器挂载聊天数据目录。
 
@@ -15,7 +15,7 @@
 | --- | --- |
 | `DASHSCOPE_API_KEY` | 百炼 API Key |
 | `DASHSCOPE_BASE_URL` | 与本地运行时相同的 DashScope Agent 服务地址 |
-| `AMAP_MAPS_API_KEY` | 高德地图 API Key |
+| `TENCENT_MAP_API_KEY` | 腾讯位置服务 WebService Key。同一把 Key 需要开通地址解析和公交路线规划 |
 | `DEEPSEEK_SEARCH_API_KEY` | DeepSeek 网页搜索 API Key |
 | `MYSQL_HOST` | 后端容器能够访问的 MySQL 主机地址，不包含协议和端口，不能使用 `localhost` |
 | `MYSQL_PORT` | MySQL 端口，默认 `3306` |
@@ -31,7 +31,7 @@
 
 `SPRING_PROFILES_ACTIVE=cloud`、`SERVER_ADDRESS=0.0.0.0` 和 `SERVER_PORT=8888` 已在镜像中设置。
 如果覆盖 `SERVER_PORT`，需要同步修改云托管服务端口。
-如需调整 JVM 参数，通过 `JAVA_TOOL_OPTIONS` 设置，例如 `-XX:MaxRAMPercentage=60.0`；为 Node.js 子进程和 JVM 非堆内存保留空间。
+如需调整 JVM 参数，通过 `JAVA_TOOL_OPTIONS` 设置，例如 `-XX:MaxRAMPercentage=60.0`。
 
 ## 数据库准备
 
@@ -58,10 +58,10 @@ docker run --rm -p 8888:8888 --env-file .env urban-travel-planning-agent
 在 Docker Desktop 中连接电脑上运行的 MySQL 时，可以使用 `MYSQL_HOST=host.docker.internal`；云端应替换为实际可达的数据库地址。
 `.env` 由 `docker run --env-file` 注入；直接使用 Maven 或 IDE 启动时，仍需在进程环境变量中配置相应的值。
 启动后访问 `http://localhost:8888/api/health`，应返回纯文本 `ok`。这个地址不访问数据库，也不要求登录，可作为云托管 HTTP 健康检查路径；检查端口仍是 **8888**。接口文档在 `http://localhost:8888/api/swagger-ui.html`。
-应用需能访问百炼、高德和 DeepSeek；对话请求会调用外部服务。
+应用需能访问百炼、`https://mcp.map.qq.com` 和 DeepSeek；对话请求会调用外部服务。
 
 构建时只打包应用，不运行测试。`src/test` 和 `knowledge/` 不会进入镜像。知识库先在云端 MySQL 中执行 `knowledge/output/knowledge_chunk.sql`，服务通过 `MYSQL_*` 环境变量读取 `knowledge_chunk`。
-Maven 和 npm 依赖在构建阶段下载，高德 MCP 在启动时直接由 `node` 运行，无需临时下载 npm 包。
+Maven 依赖在构建阶段下载。腾讯 MCP 在运行时通过 HTTPS 连接，不需要在镜像里安装地图服务。
 
 ## 会话接口验证
 
@@ -107,7 +107,7 @@ curl.exe -N --max-time 310 --get --data-urlencode "message=我想从深大到深
 流式接口不发送连接注释帧或定时心跳；查询重写和路线规划在后台执行，每完成一步才发送业务结果，异常时发送错误事件。
 等待第一步结果期间可能没有响应数据；应用 SSE 总超时为 300 秒，调试工具或网关也可能有独立的超时限制。
 
-如果工具返回 `CUQPS_HAS_EXCEEDED_THE_LIMIT`，检查高德控制台对应接口的调用频率限制，并减少重复调试和密集工具调用；增大 SSE 超时时间无法解决接口限流。
+如果腾讯工具返回配额或限流错误，检查位置服务控制台里地址解析和公交路线规划的每日额度与并发，并减少重复调试和密集工具调用；增大 SSE 超时时间无法解决接口限流。
 
 ## Maven 下载阶段 TLS 握手失败
 

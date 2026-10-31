@@ -311,17 +311,28 @@ function useExample(example) {
   nextTick(() => textarea.value?.focus())
 }
 
+// 公网 HTTP 不是安全上下文，浏览器不提供 crypto.randomUUID。getRandomValues 仍然可用。
+function createId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 async function submit() {
   if (!canSend.value) return
   const text = input.value.trim()
   const request = preference.value === '智能推荐' ? text : `${text}\n出行偏好：${preference.value}。`
   if (!activeConversation.value) {
-    const conversation = { id: crypto.randomUUID(), title: text.slice(0, 26), messages: [], loaded: true, persisted: false }
+    const conversation = { id: createId(), title: text.slice(0, 26), messages: [], loaded: true, persisted: false }
     conversations.value.unshift(conversation)
     activeId.value = conversation.id
   }
   const conversation = activeConversation.value
-  conversation.messages.push({ id: crypto.randomUUID(), role: 'user', content: request })
+  conversation.messages.push({ id: createId(), role: 'user', content: request })
   input.value = ''
   await requestReply(conversation, request)
 }
@@ -332,7 +343,7 @@ async function requestReply(conversation, request, failedMessage) {
   pendingConversationId.value = conversation.id
   if (failedMessage) conversation.messages.splice(conversation.messages.indexOf(failedMessage), 1)
   const reply = reactive({
-    id: crypto.randomUUID(), role: 'assistant', content: '', steps: [],
+    id: createId(), role: 'assistant', content: '', steps: [],
     status: 'streaming', request, error: false, errorText: '',
     startedAt: Date.now(), finishedAt: null,
   })

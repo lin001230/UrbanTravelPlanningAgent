@@ -42,7 +42,8 @@ public class ToolCallingAgent extends ReActAgent {
         this.chatOptions = DashScopeChatOptions.builder()
                 .internalToolExecutionEnabled(false)
                 .multiModel(true)
-                .enableThinking(true)
+                // 关闭深度思考
+                .enableThinking(false)
                 .build();
     }
 
@@ -116,6 +117,7 @@ public class ToolCallingAgent extends ReActAgent {
             agentTurn.setMessageList(toolExecutionResult.conversationHistory());
             ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
             String toolResponse = toolResponseMessage.getResponses().stream()
+                    // 过滤掉终止工具的调用结果，只保留其他工具的调用结果
                     .filter(response -> !TerminateTool.NAME.equals(response.name()))
                     .map(response -> "工具" + response.name() + "的调用结果：" + response.responseData())
                     .collect(Collectors.joining("\n"));
@@ -131,5 +133,41 @@ public class ToolCallingAgent extends ReActAgent {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * 不再提供工具。只根据已经查到的路线结果写给用户看的方案，并打开思考。
+     */
+    @Override
+    protected String writeFinalAnswer(AgentTurn agentTurn) {
+        // 获取消息列表
+        List<Message> promptMessages = new ArrayList<>(agentTurn.getMessageList());
+        if (agentTurn.getKnowledgeRetrievalResults() != null) {
+            // 加入知识库检索结果，并作为第一个消息
+            promptMessages.addFirst(agentTurn.getKnowledgeRetrievalResults());
+        }
+        promptMessages.add(new SystemMessage("工具已经查询完成。请只根据已有结果，用中文写出完整的地铁出行方案。不要调用任何工具。"));
+        DashScopeChatOptions answerOptions = DashScopeChatOptions.builder()
+                .internalToolExecutionEnabled(false)
+                .multiModel(true)
+                // 打开深度思考
+                .enableThinking(true)
+                .build();
+        String answer = chatClient.prompt()
+                .system(getSystemPrompt())
+                .messages(promptMessages)
+                .options(answerOptions)
+                .call()
+                .content();
+        // null/空值 处理
+        answer = answer == null ? "" : answer.strip();
+        // 记录最终方案字数
+        log.info("最终方案字数: {}", answer.length());
+        // 将最终方案加入消息列表
+        List<Message> messages = new ArrayList<>(agentTurn.getMessageList());
+        messages.add(new AssistantMessage(answer));
+        agentTurn.setMessageList(messages);
+        agentTurn.setThinkResult(answer);
+        return answer;
     }
 }

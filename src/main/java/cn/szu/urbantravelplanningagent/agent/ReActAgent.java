@@ -18,15 +18,13 @@ public abstract class ReActAgent extends BaseAgent {
             if (shouldAct) {
                 // 调用工具
                 String actResult = act(agentTurn);
-                actResult = actResult == null ? "" : actResult;
-                String thinkResult = agentTurn.getThinkResult() == null ? "" : agentTurn.getThinkResult();
-                // 只调用了结束工具时，actResult 为空，避免正文末尾多出一个空行。
-                String visible = actResult.isEmpty() ? thinkResult : thinkResult + "\n" + actResult;
-                // 结束调用发生之后才知道这是最后一步。正文为空时再单独生成答案。
-                if (agentTurn.getStatus() == ModelStatus.FINISHED && visible.isBlank()) {
+                if (agentTurn.getStatus() == ModelStatus.FINISHED) {
+                    // 如果模型已经结束，则直接返回最终答案
                     return writeFinalAnswer(agentTurn);
                 }
-                return visible;
+                actResult = actResult == null ? "" : actResult;
+                String thinkResult = agentTurn.getThinkResult() == null ? "" : agentTurn.getThinkResult();
+                return actResult.isEmpty() ? thinkResult : thinkResult + "\n" + actResult;
             } else {
                 // 没有调用工具时，设置状态为已结束
                 agentTurn.setStatus(ModelStatus.FINISHED);

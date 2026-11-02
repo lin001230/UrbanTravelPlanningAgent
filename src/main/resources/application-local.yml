@@ -26,3 +26,7 @@ spring:
 # DeepSeek 网页搜索：https://api.deepseek.com/v1/tools/search
 deepseek-search-api:
   api-key: ${DEEPSEEK_SEARCH_API_KEY}
+
+# 公交路线工具直接请求腾讯 WebService，以便拿到 MCP 摘要里丢掉的途经站。
+tencent-map:
+  api-key: ${TENCENT_MAP_API_KEY}

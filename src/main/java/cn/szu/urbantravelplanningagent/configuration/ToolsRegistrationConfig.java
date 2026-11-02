@@ -3,6 +3,7 @@ package cn.szu.urbantravelplanningagent.configuration;
 import cn.szu.urbantravelplanningagent.tool.GetCurrentDateTimeTool;
 import cn.szu.urbantravelplanningagent.tool.SearchOnInternetTool;
 import cn.szu.urbantravelplanningagent.tool.TerminateTool;
+import cn.szu.urbantravelplanningagent.tool.TransitRouteTool;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -27,11 +28,14 @@ public class ToolsRegistrationConfig {
         TerminateTool terminateTool = new TerminateTool();
         // 获取当前时间工具
         GetCurrentDateTimeTool getCurrentDateTimeTool = new GetCurrentDateTimeTool();
+        // 获取公交和地铁线路工具
+        TransitRouteTool transitRouteTool = new TransitRouteTool();
 
         // 注册自定义工具
         List<ToolCallback> toolCallbackList = new ArrayList<>(List.of(ToolCallbacks.from(
                 searchOnInternetTool,
                 getCurrentDateTimeTool,
+                transitRouteTool,
                 terminateTool
         )));
 

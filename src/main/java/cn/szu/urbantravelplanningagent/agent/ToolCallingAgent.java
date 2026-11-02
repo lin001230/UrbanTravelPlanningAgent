@@ -146,12 +146,12 @@ public class ToolCallingAgent extends ReActAgent {
             // 加入知识库检索结果，并作为第一个消息
             promptMessages.addFirst(agentTurn.getKnowledgeRetrievalResults());
         }
-        promptMessages.add(new SystemMessage("工具已经查询完成。请只根据已有结果，用中文写出完整的地铁出行方案。不要调用任何工具。"));
+        promptMessages.add(new SystemMessage("工具已经查询完成。请直接用中文写出用户会看到的完整出行方案，包括进出站口，以及每一段乘坐按顺序经过的中间站名。不要只写经过几站。途经站只抄 planTransit 返回的名称。不要写过程说明，不要调用任何工具。"));
         DashScopeChatOptions answerOptions = DashScopeChatOptions.builder()
                 .internalToolExecutionEnabled(false)
                 .multiModel(true)
-                // 打开深度思考
-                .enableThinking(true)
+                // 深度思考开关
+                .enableThinking(false)
                 .build();
         String answer = chatClient.prompt()
                 .system(getSystemPrompt())

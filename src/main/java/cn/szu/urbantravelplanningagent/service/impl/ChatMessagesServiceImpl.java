@@ -2,6 +2,7 @@ package cn.szu.urbantravelplanningagent.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import cn.szu.urbantravelplanningagent.constant.SessionStatus;
 import cn.szu.urbantravelplanningagent.context.LoginUserContext;
@@ -12,6 +13,7 @@ import cn.szu.urbantravelplanningagent.mapper.ChatMessageMapper;
 import cn.szu.urbantravelplanningagent.mapper.ChatSessionMapper;
 import cn.szu.urbantravelplanningagent.service.ChatMessagesService;
 import cn.szu.urbantravelplanningagent.tool.TerminateTool;
+import cn.szu.urbantravelplanningagent.tool.TransitRouteTool;
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -56,6 +58,11 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
         return messages;
     }
 
+    /**
+     * 获取聊天历史
+     * @param chatId
+     * @return
+     */
     @Override
     public List<ChatMessageView> getChatHistory(String chatId) {
         Assert.hasText(chatId, "会话 ID 不能为空");
@@ -68,8 +75,10 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
             turns.computeIfAbsent(row.getTurnId(), ignored -> new ArrayList<>()).add(row);
         }
         List<ChatMessageView> history = new ArrayList<>();
+        // 遍历回合
         for (var entry : turns.entrySet()) {
             List<ChatMessageView.Step> steps = new ArrayList<>();
+            List<TransitRouteTool.RoutePlan> routes = List.of();
             for (ChatMessageEntity row : entry.getValue()) {
                 Message message = toMessage(row);
                 if (message instanceof UserMessage) {
@@ -77,6 +86,11 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
                             "user", message.getText(), List.of()));
                 } else if (message instanceof AssistantMessage) {
                     steps.add(new ChatMessageView.Step(steps.size() + 1, StrUtil.nullToEmpty(message.getText())));
+                    // 读取路线
+                    List<TransitRouteTool.RoutePlan> parsed = readRoutes(row.getPayload());
+                    if (!parsed.isEmpty()) {
+                        routes = parsed;
+                    }
                 } else if (message instanceof ToolResponseMessage tool) {
                     String toolText = tool.getResponses().stream()
                             .filter(response -> !TerminateTool.NAME.equals(response.name()))
@@ -96,10 +110,99 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
             }
             if (!steps.isEmpty()) {
                 history.add(new ChatMessageView("assistant-" + entry.getKey(), entry.getKey(),
-                        "assistant", steps.getLast().content(), List.copyOf(steps)));
+                        "assistant", steps.getLast().content(), List.copyOf(steps), routes));
             }
         }
         return history;
+    }
+
+    /** 最终回复的 payload 才有 routes。工具调用消息里没有这个字段。 */
+    private List<TransitRouteTool.RoutePlan> readRoutes(String payload) {
+        // 如果 payload 为空或不是 JSON 对象，则返回空列表
+        if (StrUtil.isBlank(payload) || !JSONUtil.isTypeJSONObject(payload)) {
+            return List.of();
+        }
+        // 获取 routes 数组
+        JSONArray array = JSONUtil.parseObj(payload).getJSONArray("routes");
+        // 如果 routes 数组为空，则返回空列表
+        if (array == null || array.isEmpty()) {
+            return List.of();
+        }
+        // 创建方案列表
+        List<TransitRouteTool.RoutePlan> plans = new ArrayList<>();
+        // 遍历 routes 数组
+        for (Object item : array) {
+            // 如果 item 不是 JSON 对象，则跳过
+            if (!(item instanceof JSONObject plan)) {
+                continue;
+            }
+            // 添加方案
+            plans.add(new TransitRouteTool.RoutePlan(
+                    plan.getInt("durationMinutes", 0),
+                    plan.getInt("distanceMeters", 0),
+                    plan.getInt("walkingMeters", 0),
+                    readLegs(plan.getJSONArray("legs"))));
+        }
+        // 返回方案列表
+        return List.copyOf(plans);
+    }
+
+    /**
+     * 读取路线
+     * @param legs
+     * @return
+     */
+    private List<TransitRouteTool.Leg> readLegs(JSONArray legs) {
+        // 如果 legs 为空，则返回空列表
+        if (legs == null || legs.isEmpty()) {
+            return List.of();
+        }
+        List<TransitRouteTool.Leg> result = new ArrayList<>();
+        // 遍历 legs 数组
+        for (Object item : legs) {
+            // 如果 item 不是 JSON 对象，则跳过
+            if (!(item instanceof JSONObject leg)) {
+                continue;
+            }
+            // 添加路线
+            result.add(new TransitRouteTool.Leg(
+                    StrUtil.nullToEmpty(leg.getStr("mode")),
+                    leg.getInt("distanceMeters", 0),
+                    leg.getInt("durationMinutes", 0),
+                    StrUtil.nullToEmpty(leg.getStr("line")),
+                    StrUtil.nullToEmpty(leg.getStr("direction")),
+                    StrUtil.nullToEmpty(leg.getStr("board")),
+                    StrUtil.nullToEmpty(leg.getStr("boardExit")),
+                    StrUtil.nullToEmpty(leg.getStr("alight")),
+                    StrUtil.nullToEmpty(leg.getStr("alightExit")),
+                    readStrings(leg.getJSONArray("stops")),
+                    StrUtil.nullToEmpty(leg.getStr("price")),
+                    StrUtil.nullToEmpty(leg.getStr("notice")),
+                    readStrings(leg.getJSONArray("alternatives"))));
+        }
+        // 返回路线列表
+        return List.copyOf(result);
+    }
+
+    /**
+     * 读取字符串列表
+     * @param array
+     * @return
+     */
+    private List<String> readStrings(JSONArray array) {
+        // 如果 array 为空，则返回空列表
+        if (array == null || array.isEmpty()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        // 遍历 array 数组
+        for (Object item : array) {
+            // 如果 item 不为空且不是空白字符串，则添加到 values 列表中
+            if (item != null && !item.toString().isBlank()) {
+                values.add(item.toString());
+            }
+        }
+        return List.copyOf(values);
     }
 
     /**
@@ -151,26 +254,38 @@ public class ChatMessagesServiceImpl implements ChatMessagesService {
     public void saveChatMessages(String chatId, String turnId, List<Message> messages) {
         // 仅更新活跃时间，避免把推理期间用户修改的标题覆盖回旧值。
         chatSessionMapper.touchActivity(chatId, LocalDateTime.now());
-
-        messages.forEach(message -> {
-            // 设置共有属性
-            ChatMessageEntity chatMessageEntity = ChatMessageEntity.builder()
-                    .chatId(chatId)
-                    .turnId(turnId)
-                    .role(message.getMessageType().getValue())
-                    .content(message.getText() == null ? "" : message.getText())
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            // 如果有工具调用，设置 payload 属性值
-            if (message instanceof AssistantMessage assistantMessage && assistantMessage.hasToolCalls()) {
-                // 模型输出，设置工具调用信息
-                chatMessageEntity.setPayload(JSONUtil.toJsonStr(Map.of("tool_calls", assistantMessage.getToolCalls())));
-            } else if (message instanceof ToolResponseMessage toolResponseMessage) {
-                // 工具调用响应，设置工具调用响应信息
-                chatMessageEntity.setPayload(JSONUtil.toJsonStr(Map.of("responses", toolResponseMessage.getResponses())));
-            }
-            chatMessageMapper.insert(chatMessageEntity);
-        });
+        // 获取最后一条消息
+        Message last = messages.isEmpty() ? null : messages.getLast();
+        // 获取当前方案
+        List<TransitRouteTool.RoutePlan> plans = TransitRouteTool.currentPlans();
+        try {
+            messages.forEach(message -> {
+                // 设置共有属性
+                ChatMessageEntity chatMessageEntity = ChatMessageEntity.builder()
+                        .chatId(chatId)
+                        .turnId(turnId)
+                        .role(message.getMessageType().getValue())
+                        .content(message.getText() == null ? "" : message.getText())
+                        .createdAt(LocalDateTime.now())
+                        .build();
+                // 如果有工具调用，设置 payload 属性值
+                if (message instanceof AssistantMessage assistantMessage && assistantMessage.hasToolCalls()) {
+                    // 模型输出，设置工具调用信息
+                    chatMessageEntity.setPayload(JSONUtil.toJsonStr(Map.of("tool_calls", assistantMessage.getToolCalls())));
+                } else if (message instanceof ToolResponseMessage toolResponseMessage) {
+                    // 工具调用响应，设置工具调用响应信息
+                    chatMessageEntity.setPayload(JSONUtil.toJsonStr(Map.of("responses", toolResponseMessage.getResponses())));
+                } else if (message == last && message instanceof AssistantMessage assistantMessage
+                        && !assistantMessage.hasToolCalls() && !plans.isEmpty()) {
+                    // 最终回复没有工具调用。路线只挂在这一条上，供之后打开记录时重画卡片。
+                    chatMessageEntity.setPayload(JSONUtil.toJsonStr(Map.of("routes", plans)));
+                }
+                chatMessageMapper.insert(chatMessageEntity);
+            });
+        } finally {
+            // 清空当前方案
+            TransitRouteTool.clearCurrentPlans();
+        }
     }
 
     /**

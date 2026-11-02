@@ -20,7 +20,12 @@ export async function getChatMessages(chatId) {
   const { data } = await client.get('/chat/messages', { params: { chatId } })
   const messages = unwrap(data)
   if (!Array.isArray(messages)) throw new Error('历史消息格式异常，请稍后重试。')
-  return messages.map((message) => ({ ...message, steps: message.steps ?? [], status: 'done' }))
+  return messages.map((message) => ({
+    ...message,
+    steps: message.steps ?? [],
+    routes: message.routes ?? [],
+    status: 'done',
+  }))
 }
 
 export async function updateChatTitle(chatId, title) {

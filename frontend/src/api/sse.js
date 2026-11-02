@@ -42,6 +42,14 @@ export function createSseParser(onEvent) {
 // Matches the text protocol currently emitted by BaseAgent.runStream.
 export function parseAgentEvent({ event, data }) {
   if (event === 'error') throw new Error(data || '路线规划失败，请重试。')
+  if (event === 'routes') {
+    try {
+      const routes = JSON.parse(data)
+      return { type: 'routes', routes: Array.isArray(routes) ? routes : [] }
+    } catch {
+      return { type: 'routes', routes: [] }
+    }
+  }
   const final = data.match(/^模型最终的输出为[：:][ \t]*/)
   if (final) return { type: 'final', content: data.slice(final[0].length).trim() }
   const step = data.match(/^第\s*(\d+)\s*步的结果为[：:][ \t]*/)

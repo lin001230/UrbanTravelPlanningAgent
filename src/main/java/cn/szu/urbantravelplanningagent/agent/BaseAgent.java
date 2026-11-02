@@ -3,6 +3,7 @@ package cn.szu.urbantravelplanningagent.agent;
 import cn.szu.urbantravelplanningagent.constant.ModelStatus;
 import cn.szu.urbantravelplanningagent.knowledge.KnowledgeRetriever;
 import cn.szu.urbantravelplanningagent.service.ChatMessagesService;
+import cn.szu.urbantravelplanningagent.tool.TransitRouteTool;
 import cn.szu.urbantravelplanningagent.service.ConversationSummaryService;
 import jakarta.annotation.Resource;
 import lombok.Data;
@@ -141,11 +142,16 @@ public abstract class BaseAgent {
                 }
                 // 获取本轮的聊天消息列表
                 List<Message> newMessageList = new ArrayList<>(agentTurn.getMessageList().subList(historyMessageLength, agentTurn.getMessageList().size()));
+                // 获取当前方案
+                List<TransitRouteTool.RoutePlan> plans = TransitRouteTool.currentPlans();
                 // 将本轮的聊天消息保存到数据库中
                 chatMessagesService.saveChatMessages(chatId, turnId, newMessageList);
                 successSaved = true;
                 // 最终事件代表本轮已落库，前端此时可以安全刷新历史。
                 if (!closed.get()) {
+                    // 发送当前方案
+                    emitter.send(SseEmitter.event().name("routes").data(plans));
+                    // 发送最终输出
                     emitter.send("模型最终的输出为：" + agentTurn.getResponseContent());
                 }
             } catch (Exception e) {
@@ -176,6 +182,7 @@ public abstract class BaseAgent {
                 } finally {
                     agentTurn.setKnowledgeRetrievalResults(null);
                     agentTurn.setStatus(ModelStatus.IDLE);
+                    TransitRouteTool.clearCurrentPlans();
                     emitter.complete();
                 }
             }

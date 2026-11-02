@@ -8,6 +8,7 @@ import {
 } from 'lucide-vue-next'
 import AuthView from './components/AuthView.vue'
 import MessageContent from './components/MessageContent.vue'
+import RouteCard from './components/RouteCard.vue'
 import { clearSession, logoutAccount, readStoredUser } from './api/auth'
 import { isUnauthorizedError, onUnauthorized, readStoredToken } from './api/http'
 import { deleteChat, getChatError, getChatMessages, getChats, sendChatStream, updateChatTitle } from './api/chat'
@@ -343,7 +344,7 @@ async function requestReply(conversation, request, failedMessage) {
   pendingConversationId.value = conversation.id
   if (failedMessage) conversation.messages.splice(conversation.messages.indexOf(failedMessage), 1)
   const reply = reactive({
-    id: createId(), role: 'assistant', content: '', steps: [],
+    id: createId(), role: 'assistant', content: '', steps: [], routes: [],
     status: 'streaming', request, error: false, errorText: '',
     startedAt: Date.now(), finishedAt: null,
   })
@@ -357,7 +358,9 @@ async function requestReply(conversation, request, failedMessage) {
       chatId: conversation.id,
       signal: controller.signal,
       onEvent(event) {
-        if (event.type === 'final') {
+        if (event.type === 'routes') {
+          reply.routes = event.routes
+        } else if (event.type === 'final') {
           reply.content = event.content
           reply.status = 'done'
           reply.finishedAt = Date.now()
@@ -508,7 +511,12 @@ onBeforeUnmount(() => {
                 </details>
                 <div v-if="message.status === 'streaming'" class="stream-progress"><div class="thinking" role="status"><span class="thinking-dots"><i></i><i></i><i></i></span>{{ message.steps.length ? '正在继续规划路线…' : '正在为你规划路线…' }}<span class="elapsed-live">已用时 {{ elapsedLabel(message) }}</span></div><p class="thinking-caption">{{ message.steps.length ? '每完成一步，结果会实时显示在上方' : '正在等待第一步结果，规划可能需要一点时间' }}</p></div>
                 <div v-if="message.error" class="error-message"><p>{{ message.errorText || message.content }}</p><button class="retry-button" :disabled="pending" @click="retry(message)"><RefreshCw :size="14" />重新尝试</button></div>
-                <template v-else-if="message.content"><div v-if="message.steps?.length" class="final-result-label"><Check :size="15" />最终结果</div><MessageContent :content="message.content" /><p v-if="message.startedAt" class="inference-time"><Clock3 :size="13" />推理用时 {{ elapsedLabel(message) }}</p></template>
+                <template v-else-if="message.content || message.routes?.length">
+                  <div v-if="message.steps?.length && message.content" class="final-result-label"><Check :size="15" />最终结果</div>
+                  <MessageContent v-if="message.content" :content="message.content" />
+                  <RouteCard v-if="message.routes?.length" :routes="message.routes" />
+                  <p v-if="message.startedAt && message.content" class="inference-time"><Clock3 :size="13" />推理用时 {{ elapsedLabel(message) }}</p>
+                </template>
                 <button v-if="message.content && !message.error" class="copy-button" @click="copyMessage(message)"><Check v-if="copiedId === message.id" :size="14" /><Copy v-else :size="14" />{{ copiedId === message.id ? '已复制' : '复制' }}</button>
               </div>
             </template>

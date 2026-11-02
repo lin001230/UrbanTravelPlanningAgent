@@ -31,11 +31,11 @@ spring:
           dimensions: 1024
     mcp:
       client:
-        sse:
+        streamable-http:
           connections:
             tencent-map:
               url: https://mcp.map.qq.com
-              sse-endpoint: /sse?key=${TENCENT_MAP_API_KEY}
+              endpoint: /mcp?key=${TENCENT_MAP_API_KEY}&format=0
 
 deepseek-search-api:
   api-key: ${DEEPSEEK_SEARCH_API_KEY}

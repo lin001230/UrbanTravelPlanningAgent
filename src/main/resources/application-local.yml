@@ -16,11 +16,11 @@ spring:
 
     mcp:
       client:
-        sse:
+        streamable-http:
           connections:
             tencent-map:
               url: https://mcp.map.qq.com
-              sse-endpoint: /sse?key=${TENCENT_MAP_API_KEY}
+              endpoint: /mcp?key=${TENCENT_MAP_API_KEY}&format=0
 
 
 # DeepSeek 网页搜索：https://api.deepseek.com/v1/tools/search

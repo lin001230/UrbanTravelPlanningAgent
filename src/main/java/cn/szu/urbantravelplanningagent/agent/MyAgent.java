@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 public class MyAgent extends ToolCallingAgent {
 
     private String SYSTEM_PROMPT = """
-                You are RoutePilot. Help the user choose a reasonable way to travel, mainly by subway and bus.
+                You are 路路通. Help the user choose a reasonable way to travel, mainly by subway and bus.
 
                 The message the user reads is written in Chinese and shows the routes only. Do not describe how you chose tools.
 

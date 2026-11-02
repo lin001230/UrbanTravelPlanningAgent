@@ -114,7 +114,7 @@ onMounted(() => usernameInput.value?.focus())
     <div class="auth-left">
       <a class="brand" href="#" @click.prevent="!required && emit('close')">
         <span class="brand-mark"><TrainFront :size="22" :stroke-width="1.8" /></span>
-        <span class="brand-name">路小行<span>RoutePilot</span></span>
+        <span class="brand-name">路路通<span>RoutePilot</span></span>
       </a>
       <p class="auth-tagline">用智能路线，<br>发现更大的世界</p>
       <div class="auth-hero-copy">
@@ -178,7 +178,7 @@ onMounted(() => usernameInput.value?.focus())
           <button type="button" role="tab" :aria-selected="!isRegister" :class="{ selected: !isRegister }" @click="switchMode('login')">登录</button>
           <button type="button" role="tab" :aria-selected="isRegister" :class="{ selected: isRegister }" @click="switchMode('register')">注册</button>
         </div>
-        <h2>{{ isRegister ? '创建路小行账号' : '欢迎回来' }}</h2>
+        <h2>{{ isRegister ? '创建路路通账号' : '欢迎回来' }}</h2>
         <p class="auth-lead">{{ isRegister ? '起一个账号名，以后就用它登录。' : '用账号和密码继续你的行程。' }}</p>
 
         <form @submit.prevent="submit">

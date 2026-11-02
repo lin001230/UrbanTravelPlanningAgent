@@ -430,9 +430,9 @@ onBeforeUnmount(() => {
   <div class="app-shell" :inert="showAuth || undefined">
     <button v-if="sidebarOpen" class="sidebar-backdrop" aria-label="关闭侧栏" @click="sidebarOpen = false"></button>
     <aside class="sidebar" :class="{ 'is-open': sidebarOpen }">
-      <a class="brand" href="#" aria-label="路小行首页" @click.prevent="newConversation">
+      <a class="brand" href="#" aria-label="路路通首页" @click.prevent="newConversation">
         <span class="brand-mark"><TrainFront :size="24" :stroke-width="1.8" /></span>
-        <span class="brand-name">路小行<span>RoutePilot</span></span>
+        <span class="brand-name">路路通<span>RoutePilot</span></span>
       </a>
       <button class="mobile-close icon-button" aria-label="关闭侧栏" @click="sidebarOpen = false"><PanelLeftClose :size="20" /></button>
       <button class="new-chat" @click="newConversation"><Plus :size="18" />开启新对话<span>NEW</span></button>
@@ -477,7 +477,7 @@ onBeforeUnmount(() => {
           <div class="welcome-symbol"><TrainFront :size="39" :stroke-width="1.55" /><span><Sparkles :size="14" /></span></div>
           <div class="eyebrow">YOUR EVERYDAY METRO COMPANION</div>
           <h1>下一站，<span>想去哪里？</span></h1>
-          <p class="welcome-description">我是路小行，你的地铁出行搭子。<br />告诉我起点和终点，把路线规划交给我。</p>
+          <p class="welcome-description">我是路路通，你的地铁出行搭子。<br />告诉我起点和终点，把路线规划交给我。</p>
 
           <div class="journey-illustration" aria-hidden="true">
             <svg viewBox="0 0 640 95" fill="none">
@@ -504,7 +504,7 @@ onBeforeUnmount(() => {
           <article v-for="message in messages" :key="message.id" class="message" :class="message.role">
             <template v-if="message.role === 'assistant'">
               <div class="assistant-avatar"><TrainFront :size="20" /></div>
-              <div class="assistant-body"><div class="assistant-name">路小行<span>出行助手</span></div>
+              <div class="assistant-body"><div class="assistant-name">路路通<span>出行助手</span></div>
                 <details v-if="message.steps?.length" class="planning-steps" :open="message.status !== 'done'">
                   <summary><Route :size="14" />规划过程 · {{ message.steps.length }} 步<span>{{ message.status === 'streaming' ? '进行中' : message.error ? '已中断' : '已完成' }}</span></summary>
                   <div v-for="(step, index) in message.steps" :key="index" class="planning-step"><div class="step-label">第 {{ step.number }} 步</div><MessageContent :content="step.content || '本步未返回文字内容。'" /></div>

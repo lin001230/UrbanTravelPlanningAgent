@@ -29,8 +29,9 @@ public abstract class ReActAgent extends BaseAgent {
                 // 没有调用工具时，设置状态为已结束
                 agentTurn.setStatus(ModelStatus.FINISHED);
                 String thinkResult = agentTurn.getThinkResult() == null ? "" : agentTurn.getThinkResult();
-                if (thinkResult.isBlank()) {
-                    // 正文为空时再单独生成答案。
+                String nextStepPrompt = this.nextStepPrompt == null ? "" : this.nextStepPrompt;
+                if (thinkResult.isBlank() || thinkResult.strip().equals(nextStepPrompt.strip())) {
+                    // 正文为空，或只是把下一步提示原样返回时，再单独生成答案。
                     return writeFinalAnswer(agentTurn);
                 }
                 return thinkResult;

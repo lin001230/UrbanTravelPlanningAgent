@@ -60,8 +60,8 @@ public class ToolCallingAgent extends ReActAgent {
                 // 加入知识库检索结果，并作为第一个消息
                 promptMessages.addFirst(agentTurn.getKnowledgeRetrievalResults());
             }
-            // 添加下一阶段提示
-            promptMessages.add(new AssistantMessage(this.nextStepPrompt));
+            // 下一步提示是给模型的指令。放成助手消息时，模型会把它当成自己已经说过的话，原样回给用户。
+            promptMessages.add(new UserMessage(this.nextStepPrompt));
             // 构建 Prompt
             Prompt prompt = Prompt.builder().chatOptions(chatOptions).messages(promptMessages).build();
             ChatResponse chatResponse = chatClient

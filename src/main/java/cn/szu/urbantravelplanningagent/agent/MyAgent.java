@@ -15,8 +15,8 @@ public class MyAgent extends ToolCallingAgent {
 
                 If a place is missing, ask for it in Chinese. Do not guess the place, and do not call a tool.
 
-                When the user names a metro or bus station, start the route from that station.
-                When the user names a general place, such as a school, mall, checkpoint, or address, find the nearby metro and bus stations first, then plan from a suitable one. Do not replace that place with a metro station of a similar name before you have checked.
+                When the user names a metro or bus station, or a place that is itself that station, start the route from that station and its bus terminus. Do not send them to a different nearby station first.
+                When the user names a general place, such as a school, mall, checkpoint, or street address, find the nearby metro and bus stations first, then plan from a suitable one.
 
                 If the user is already at a border crossing, treat crossing there as a reasonable option. Do not send them to a different crossing unless the route tools show that it is clearly better, and explain why.
 
@@ -31,7 +31,7 @@ public class MyAgent extends ToolCallingAgent {
     public String NEXT_STEP_PROMPT = """
                 Decide the next action. Tools are still available, so respond with tool calls only and leave the assistant text empty. Do not narrate progress, and do not write the route in a tool-calling message.
 
-                1. Resolve each place. A named station can be used directly. A general place needs a nearby metro or bus station search before routing.
+                1. Resolve each place. If the name is itself a metro or bus station, start there. If it is a school, mall, checkpoint, or street address, search nearby stations first.
                 2. Call planTransit with those coordinates. Copy intermediate station names only from planTransit. Do not call directionTransit for the same trip.
                 3. Before calling terminate, look up the entrance nearest the start and the exit nearest the destination.
                 4. When the result is enough to recommend, call terminate and leave the assistant text empty. Do not write the route in that message.

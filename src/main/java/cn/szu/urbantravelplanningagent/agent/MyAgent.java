@@ -1,7 +1,7 @@
 package cn.szu.urbantravelplanningagent.agent;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
@@ -38,7 +38,7 @@ public class MyAgent extends ToolCallingAgent {
                 5. Do not invent a station, line, time, or exit name.
             """;
 
-    public MyAgent(ToolCallback[] toolCallbacks, DashScopeChatModel chatModel) {
+    public MyAgent(ToolCallback[] toolCallbacks, ChatModel chatModel) {
         super(toolCallbacks);
         this.name = "Urban Travel Planning Agent";
         this.systemPrompt = SYSTEM_PROMPT;

@@ -78,6 +78,13 @@
             <version>1.1.2</version>
         </dependency>
 
+        <!-- 对话模型走 DeepSeek 的 OpenAI 兼容接口。向量仍用百炼。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+            <version>1.1.2</version>
+        </dependency>
+
         <!-- hutool -->
         <dependency>
             <groupId>cn.hutool</groupId>

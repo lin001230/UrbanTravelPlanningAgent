@@ -4,7 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.szu.urbantravelplanningagent.constant.ModelStatus;
 import cn.szu.urbantravelplanningagent.tool.TerminateTool;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.*;
@@ -17,6 +17,7 @@ import org.springframework.ai.tool.ToolCallback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Data
@@ -39,12 +40,19 @@ public class ToolCallingAgent extends ReActAgent {
         super();
         this.availableTools = toolCallbacks;
         toolCallingManager = ToolCallingManager.builder().build();
-        this.chatOptions = DashScopeChatOptions.builder()
+        this.chatOptions = chatOptions();
+    }
+
+    /**
+     * 模型名沿用 spring.ai.openai.chat.options.model，这里不覆盖。
+     * deepseek-flash 默认开启思考。设置为关闭。
+     */
+    private static OpenAiChatOptions chatOptions() {
+        OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .internalToolExecutionEnabled(false)
-                .multiModel(true)
-                // 关闭深度思考
-                .enableThinking(false)
                 .build();
+        options.setExtraBody(Map.of("thinking", Map.of("type", "disabled")));
+        return options;
     }
 
     /**
@@ -147,12 +155,7 @@ public class ToolCallingAgent extends ReActAgent {
             promptMessages.addFirst(agentTurn.getKnowledgeRetrievalResults());
         }
         promptMessages.add(new SystemMessage("工具已经查询完成。请直接用中文写出用户会看到的完整出行方案，包括进出站口，以及每一段乘坐按顺序经过的中间站名。不要只写经过几站。途经站只抄 planTransit 返回的名称。不要写过程说明，不要调用任何工具。"));
-        DashScopeChatOptions answerOptions = DashScopeChatOptions.builder()
-                .internalToolExecutionEnabled(false)
-                .multiModel(true)
-                // 深度思考开关
-                .enableThinking(false)
-                .build();
+        OpenAiChatOptions answerOptions = chatOptions();
         String answer = chatClient.prompt()
                 .system(getSystemPrompt())
                 .messages(promptMessages)
